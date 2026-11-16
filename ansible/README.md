@@ -3,7 +3,9 @@
 Automatización de la infraestructura de la Fase 1: monitorización con Checkmk y preparación de las VMs Windows en Proxmox.
 
 > **Origen de esta carpeta.** Ansible se ejecuta en la **VM Ansible** (`192.168.40.5`, carpeta `~/cibernova/ansible`). Lo que hay aquí es una copia versionada de ese proyecto.
+> 
 > Versión: **Ansible core 2.16.3**. Contenido comprobado contra la VM el **16/11/2026**.
+> 
 > Si se modifica algo en la VM, hay que copiarlo también aquí y actualizar esta fecha.
 
 ## Índice
@@ -70,11 +72,15 @@ Conceptos que se usan en este documento:
 | Playbook | Fecha | Hosts | Qué hace |
 | --- | --- | --- | --- |
 | `checkmk-servidor.yml` | 05/11 | `mon` | Instala Checkmk 2.5.0p18 Community y crea el sitio `cibernova` (`creates:` lo hace idempotente) |
-| `checkmk-agente.yml` | 05/11 | `linux` | Instala el agente, comprueba que responde y, por la API REST, da de alta el host, descubre sus servicios y activa los cambios |
-| `proxmox-vms-windows.yml` | 12/11 | `proxmox` | Comprueba las ISO, guarda la configuración antigua en `/root/qm-antes`, borra las VMs Windows sin la etiqueta `ws2025` y las crea con VirtIO, VLAN 40, ISO de WS2025 y virtio-win |
+| `checkmk-agente.yml` | 05/11 | `linux` | 	En cada servidor Linux:
+1. Instala el agente de Checkmk (el programa que envía los datos del servidor).
+2. Comprueba que el agente responde.
+3. Desde la VM Ansible, llama a la API REST de Checkmk para dar de alta el host, descubrir sus servicios (CPU, RAM, discos, red…) y activar los cambios.|
+| `proxmox-vms-windows.yml` | 12/11 | `proxmox` |1. Comprueba que existen las ISO (Windows Server 2025 y virtio-win) antes de tocar nada, para no dejar VMs a medias.
+2. Guarda la configuración actual de cada VM en /root/qm-antes, como copia de seguridad.
+3. Borra y vuelve a crear las VMs Windows que no tienen la etiqueta ws2025, con controladores VirtIO, red en la VLAN 40, la ISO de Windows Server 2025 y el CD de drivers virtio-win. |
 
 
-> **No confundir las etiquetas.** `ws2025` es una **etiqueta de Proxmox** (el campo *Tags* que aparece junto al nombre de la VM), no una etiqueta VLAN como `tag=40`. El playbook la usa como marca de "esta VM ya está recreada correctamente": si la VM la tiene, no la toca.
 
 ## 5. Cómo ejecutarlo
 
