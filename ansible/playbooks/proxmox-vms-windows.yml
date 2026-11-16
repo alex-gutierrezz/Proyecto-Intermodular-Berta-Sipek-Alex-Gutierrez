@@ -16,7 +16,7 @@
     windows_vms:
       - { id: 100, nombre: DC01,    cores: 2, ram: 4096, disco: 60 }
       - { id: 101, nombre: DC02,    cores: 2, ram: 4096, disco: 60 }
-      - { id: 102, nombre: DHCP,    cores: 2, ram: 2048, disco: 40 }
+      - { id: 102, nombre: DHCP01,    cores: 2, ram: 2048, disco: 40 }
       - { id: 104, nombre: DHCP02,  cores: 2, ram: 2048, disco: 40 }
       - { id: 108, nombre: FILES01, cores: 2, ram: 8192, disco: 60 }
       - { id: 109, nombre: FILES02, cores: 2, ram: 8192, disco: 60 }
