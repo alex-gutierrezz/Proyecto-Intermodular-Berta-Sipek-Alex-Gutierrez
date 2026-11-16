@@ -55,6 +55,8 @@ Anotamos una fila por cada sesión de clase, también las que no pudimos avanzar
 
 Para cada desfase anotamos qué habíamos planificado, qué pasó, por qué, qué medidas tomamos y qué impacto tuvo. Hasta ahora hemos perdido 3 sesiones por causas externas (24/09, 29/09 y 27/10) y unas 2 con la instalación de Proxmox.
 
+**Propuesta inicial.** La primera propuesta de la Fase 1 se conserva en [`historico/propuesta-inicial.pdf`](historico/propuesta-inicial.pdf) como punto de partida y ha quedado superada. Planteaba 4 servidores Windows y 2 Linux sin duplicar, 10 VLAN (de la 10 a la 100) y Proxmox en 192.168.10.10 con el dominio empresa.local. El diseño actual duplica los servicios para cumplir el requisito de redundancia, solo monta las VLAN 40 y 100 (la de clientes está pendiente), usa la IP asignada al grupo (192.168.202.7) y el dominio cibernova.local, y añade Ansible y Checkmk (D5 y D6).
+
 | # | Planificado | Qué ocurrió | Causa | Medida / replanificación | Impacto |
 | --- | --- | --- | --- | --- | --- |
 | D1 | Hito 1, análisis y diseño (22/09 a 01/10) | No hubo clase el 24/09 ni el 29/09 | Festivo y cancelación de las clases por lluvia | El calendario tenía margen, así que se terminó el diseño en las sesiones que quedaban sin cambiar el plan | Menos tiempo de diseño; el hipervisor empezó el 06/10, como estaba previsto |
