@@ -1,0 +1,16 @@
+# Secretos: nunca en Git
+.vault_pass*
+*.vault_pass
+*.key
+*.pem
+id_ed25519
+id_rsa
+
+# Ansible
+*.retry
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
