@@ -69,15 +69,10 @@ Conceptos que se usan en este documento:
 ## 4. Playbooks
 
 | Playbook | Fecha | Hosts | Qué hace |
-| --- | --- | --- | --- |
-| `checkmk-servidor.yml` | 05/11 | `mon` | Instala Checkmk 2.5.0p18 Community y crea el sitio `cibernova` (`creates:` lo hace idempotente) |
-| `checkmk-agente.yml` | 05/11 | `linux` | 	En cada servidor Linux:
-1. Instala el agente de Checkmk (el programa que envía los datos del servidor).
-2. Comprueba que el agente responde.
-3. Desde la VM Ansible, llama a la API REST de Checkmk para dar de alta el host, descubrir sus servicios (CPU, RAM, discos, red…) y activar los cambios. |
-| `proxmox-vms-windows.yml` | 12/11 | `proxmox` | 1. Comprueba que existen las ISO (Windows Server 2025 y virtio-win) antes de tocar nada, para no dejar VMs a medias.
-2. Guarda la configuración actual de cada VM en /root/qm-antes, como copia de seguridad.
-3. Borra y vuelve a crear las VMs Windows que no tienen la etiqueta ws2025, con controladores VirtIO, red en la VLAN 40, la ISO de Windows Server 2025 y el CD de drivers virtio-win.|
+|---|---|---|---|
+| `checkmk-servidor.yml` | 05/11 | `mon` | Instala Checkmk 2.5.0p18 Community y crea el sitio `cibernova` (utiliza `creates` para garantizar la idempotencia). |
+| `checkmk-agente.yml` | 05/11 | `linux` | En cada servidor Linux:<br><br>1. Instala el agente de Checkmk, encargado de enviar los datos del servidor.<br>2. Comprueba que el agente responde correctamente.<br>3. Desde la VM Ansible, utiliza la API REST de Checkmk para dar de alta el host, descubrir sus servicios (CPU, RAM, discos, red, etc.) y activar los cambios. |
+| `proxmox-vms-windows.yml` | 12/11 | `proxmox` | 1. Comprueba que existen las ISO de Windows Server 2025 y `virtio-win` antes de realizar cualquier modificación, evitando dejar VMs a medias.<br>2. Guarda la configuración actual de cada VM en `/root/qm-antes` como copia de seguridad.<br>3. Borra y vuelve a crear las VMs Windows que no tienen la etiqueta `ws2025`, configurándolas con controladores VirtIO, red en la VLAN 40, la ISO de Windows Server 2025 y el CD de drivers `virtio-win`. |
 
 
 ## 5. Cómo ejecutarlo
