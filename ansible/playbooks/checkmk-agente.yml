@@ -1,0 +1,62 @@
+- name: Instalar agente Checkmk y dar de alta los hosts
+  hosts: linux
+  become: true
+  vars:
+    cmk_url: "http://{{ cmk_server }}"
+    cmk_api_secret: "{{ vault_cmk_api_secret }}"
+  tasks:
+    # --- Agente en cada máquina ---
+    - name: Descargar el agente desde el servidor Checkmk
+      ansible.builtin.get_url:
+        url: "{{ cmk_url }}/{{ cmk_site }}/check_mk/agents/check-mk-agent_{{ cmk_version }}-1_all.deb"
+        dest: /tmp/check-mk-agent.deb
+
+    - name: Instalar el agente
+      ansible.builtin.apt:
+        deb: /tmp/check-mk-agent.deb
+
+    - name: Comprobar que el agente responde
+      ansible.builtin.command: check_mk_agent
+      changed_when: false
+      register: salida
+      failed_when: "'<<<check_mk>>>' not in salida.stdout"
+
+    # --- Alta automática en Checkmk vía API ---
+    - name: Dar de alta el host en Checkmk
+      checkmk.general.host:
+        server_url: "{{ cmk_url }}"
+        site: "{{ cmk_site }}"
+        api_user: automation
+        api_secret: "{{ cmk_api_secret }}"
+        validate_certs: false
+        name: "{{ inventory_hostname }}"
+        folder: "/"
+        attributes:
+          ipaddress: "{{ ansible_host }}"
+        state: present
+      delegate_to: localhost
+      become: false
+
+    - name: Descubrir los servicios del host
+      checkmk.general.discovery:
+        server_url: "{{ cmk_url }}"
+        site: "{{ cmk_site }}"
+        api_user: automation
+        api_secret: "{{ cmk_api_secret }}"
+        validate_certs: false
+        host_name: "{{ inventory_hostname }}"
+        state: fix_all
+      delegate_to: localhost
+      become: false
+
+    - name: Activar los cambios en Checkmk
+      checkmk.general.activation:
+        server_url: "{{ cmk_url }}"
+        site: "{{ cmk_site }}"
+        api_user: automation
+        api_secret: "{{ cmk_api_secret }}"
+        validate_certs: false
+        force_foreign_changes: true
+      delegate_to: localhost
+      become: false
+      run_once: true
