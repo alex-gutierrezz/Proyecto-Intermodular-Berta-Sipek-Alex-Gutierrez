@@ -33,7 +33,6 @@ ansible-playbook playbooks/proxmox-vms-windows.yml --ask-vault-pass
 ## Diferencias con la VM Ansible
 
 - En la VM el inventario está en la raíz (`inventario.ini`); aquí está en `inventory/` y `ansible.cfg` apunta a esa ruta.
-- La VM 102 todavía se llama `DHCP` en el playbook. El cambio a `DHCP01` está decidido (13/11), pero falta aplicarlo.
 
 ## Subir el vault
 
