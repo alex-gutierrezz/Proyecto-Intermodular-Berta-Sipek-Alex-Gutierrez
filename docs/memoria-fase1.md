@@ -316,9 +316,9 @@ Para que el instalador vea el disco hay que cargar el driver VirtIO SCSI. El con
 
 Si no está instalado en la máquina virtual o no se carga durante el arranque, **Windows Server no detectará ningún disco duro para instalar el sistema operativo, o bien sufrirá un pantallazo azul (`INACCESSIBLE_BOOT_DEVICE`)** si ya estaba instalado y se cambia el tipo de controladora en el hipervisor.
 
-![11-ad-instalador-vioscsi-driver.png](img/fase1/11-ad-instalador-vioscsi-driver.png)
+![Carga del driver VirtIO SCSI (vioscsi) desde virtio-win](img/fase1/11-ad-instalador-vioscsi.png)
 
-![11-ad-instalador-vioscsi.png](img/fase1/11-ad-instalador-vioscsi.png)
+![El instalador ya ve el disco de 60 GB](img/fase1/11-ad-instalador-disco.png)
 
 ## 12. Problemas encontrados y soluciones
 
