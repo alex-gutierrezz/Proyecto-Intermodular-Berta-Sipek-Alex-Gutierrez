@@ -10,6 +10,7 @@ Infraestructura virtualizada, redundante y documentada para CiberNova Solutions 
 | Ruta | Contenido |
 | --- | --- |
 | [`docs/memoria-fase1.md`](docs/memoria-fase1.md) | Memoria de la Fase 1: calendario, bitácora, desfases, decisiones técnicas, inventario, problemas y soluciones |
+| [`docs/fase1-ad-dns-dhcp.md`](docs/fase1-ad-dns-dhcp.md) | Guía de Active Directory, DNS y DHCP con Ansible: orden de ejecución, seguridad y problemas típicos |
 | [`docs/anexo-i-usuarios-grupos-permisos.md`](docs/anexo-i-usuarios-grupos-permisos.md) | Diseño del Anexo I: OUs, grupos AGDLP y matriz de permisos |
 | [`docs/img/fase1/`](docs/img/fase1/) | Capturas que se enlazan desde la memoria |
 | [`docs/historico/propuesta-inicial.pdf`](docs/historico/propuesta-inicial.pdf) | Propuesta inicial de la Fase 1, superada por el diseño actual (ver sección 4 de la memoria) |
@@ -33,8 +34,10 @@ Infraestructura virtualizada, redundante y documentada para CiberNova Solutions 
 | Plantilla Ubuntu 24.04 con cloud-init | Hecho |
 | Ansible + Vault | Hecho |
 | Monitorización con Checkmk (alta automática) | Hecho |
-| VMs Windows Server 2025 | Creadas con Ansible, instalación en curso |
-| Active Directory, DHCP, ficheros/DFS, web, SFTP, BBDD, backups | Pendiente |
+| VMs Windows Server 2025 | Creadas con Ansible; DC01 preparado, las otras 6 en preparación |
+| Active Directory + DNS | En curso: bosque `cibernova.local` creado en DC01 con Ansible (16/11); falta DC02 |
+| DHCP con failover | Playbook preparado, pendiente de ejecutar |
+| Ficheros/DFS, web, SFTP, BBDD, backups | Pendiente |
 
 ## Cómo se trabaja en este repositorio
 
