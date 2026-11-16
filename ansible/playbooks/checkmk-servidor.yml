@@ -1,0 +1,29 @@
+- name: Instalar servidor Checkmk
+  hosts: mon
+  become: true
+  vars:
+    cmk_deb: "check-mk-community-{{ cmk_version }}_0.noble_amd64.deb"
+  tasks:
+    - name: Descargar paquete de Checkmk
+      ansible.builtin.get_url:
+        url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_deb }}"
+        dest: "/tmp/{{ cmk_deb }}"
+
+    - name: Instalar Checkmk con sus dependencias
+      ansible.builtin.apt:
+        deb: "/tmp/{{ cmk_deb }}"
+
+    - name: Crear el sitio de monitorización
+      ansible.builtin.command: "omd create {{ cmk_site }}"
+      args:
+        creates: "/omd/sites/{{ cmk_site }}"
+      register: sitio
+
+    - name: Arrancar el sitio
+      ansible.builtin.command: "omd start {{ cmk_site }}"
+      when: sitio.changed
+
+    - name: Mostrar la contraseña de cmkadmin (apuntadla)
+      ansible.builtin.debug:
+        var: sitio.stdout_lines
+      when: sitio.changed
