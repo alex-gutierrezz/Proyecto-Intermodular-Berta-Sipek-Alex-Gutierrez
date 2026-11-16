@@ -1,0 +1,20 @@
+---
+# Conexión de Ansible a los Windows por WinRM (HTTP 5985 + NTLM, mensaje cifrado).
+# WinRM se activó en cada servidor con: Enable-PSRemoting -Force -SkipNetworkProfileCheck
+#
+# Windows en español: la cuenta integrada se llama "Administrador", no "Administrator".
+# - En los miembros (DHCP, FILES, BACKUP) es el Administrador local.
+# - En los DC, tras la promoción, es el Administrador del dominio (misma contraseña).
+ansible_connection: winrm
+ansible_port: 5985
+ansible_winrm_transport: ntlm
+ansible_winrm_scheme: http
+ansible_user: Administrador
+ansible_password: "{{ vault_win_admin_password }}"
+
+# "become" (runas) con la cuenta de dominio: hace falta para las tareas que, desde un
+# servidor, tocan otro equipo (autorizar el DHCP en AD, crear el failover con DHCP02).
+# Sin esto, NTLM no reenvía las credenciales (problema del "doble salto").
+ansible_become_method: runas
+ansible_become_user: "{{ ad_admin_runas }}"
+ansible_become_password: "{{ vault_win_admin_password }}"

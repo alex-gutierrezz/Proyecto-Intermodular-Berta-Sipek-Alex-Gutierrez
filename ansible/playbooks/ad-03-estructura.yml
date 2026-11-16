@@ -1,0 +1,68 @@
+---
+# Estructura del dominio: árbol de OUs del diseño del Grupo 7 y directiva de
+# contraseñas por defecto. Se ejecuta en DC01 y replica a DC02.
+# Los usuarios y grupos los crea después el script del CSV (Anexo I).
+- name: Active Directory - OUs y directiva de contraseñas
+  hosts: cn-dc01
+  gather_facts: false
+  any_errors_fatal: true
+  vars_files:
+    - ../vars/ad_estructura.yml
+  vars:
+    ou_raiz: "OU=CiberNova,{{ ad_dn }}"
+
+  tasks:
+    - name: OU raíz CiberNova
+      microsoft.ad.ou:
+        name: CiberNova
+        path: "{{ ad_dn }}"
+        protect_from_deletion: true
+
+    - name: OUs de primer nivel
+      microsoft.ad.ou:
+        name: "{{ item.nombre }}"
+        path: "{{ ou_raiz }}"
+        protect_from_deletion: true
+      loop: "{{ ous }}"
+      loop_control:
+        label: "{{ item.nombre }}"
+
+    - name: OUs hijas (departamentos, Globales/DominioLocal, Puestos/Recepcion)
+      microsoft.ad.ou:
+        name: "{{ item.1 }}"
+        path: "OU={{ item.0.nombre }},{{ ou_raiz }}"
+        protect_from_deletion: true
+      loop: "{{ ous | subelements('hijas') }}"
+      loop_control:
+        label: "{{ item.0.nombre }}/{{ item.1 }}"
+
+    - name: Directiva de contraseñas y bloqueo de cuentas del dominio
+      ansible.windows.win_powershell:
+        parameters:
+          Longitud: "{{ politica_contrasenas.longitud_minima }}"
+          Historial: "{{ politica_contrasenas.historial }}"
+          Caducidad: "{{ politica_contrasenas.caducidad_dias }}"
+          Intentos: "{{ politica_contrasenas.bloqueo_intentos }}"
+          Minutos: "{{ politica_contrasenas.bloqueo_minutos }}"
+        script: |
+          param([int]$Longitud, [int]$Historial, [int]$Caducidad, [int]$Intentos, [int]$Minutos)
+          $p = Get-ADDefaultDomainPasswordPolicy
+          $bloqueo = New-TimeSpan -Minutes $Minutos
+          $igual = $p.MinPasswordLength -eq $Longitud -and $p.PasswordHistoryCount -eq $Historial -and
+                   $p.MaxPasswordAge.Days -eq $Caducidad -and $p.ComplexityEnabled -and
+                   $p.LockoutThreshold -eq $Intentos -and $p.LockoutDuration -eq $bloqueo -and
+                   $p.LockoutObservationWindow -eq $bloqueo
+          if ($igual) { $Ansible.Changed = $false; return }
+          Set-ADDefaultDomainPasswordPolicy -Identity (Get-ADDomain).DNSRoot `
+              -MinPasswordLength $Longitud -PasswordHistoryCount $Historial `
+              -MaxPasswordAge (New-TimeSpan -Days $Caducidad) -ComplexityEnabled $true `
+              -LockoutThreshold $Intentos -LockoutDuration $bloqueo -LockoutObservationWindow $bloqueo
+
+    - name: Los equipos nuevos que se unan al dominio van a OU=Puestos (redircmp)
+      ansible.windows.win_powershell:
+        parameters:
+          Destino: "OU=Puestos,OU=Equipos,{{ ou_raiz }}"
+        script: |
+          param([string]$Destino)
+          if ((Get-ADDomain).ComputersContainer -eq $Destino) { $Ansible.Changed = $false; return }
+          redircmp $Destino | Out-Null

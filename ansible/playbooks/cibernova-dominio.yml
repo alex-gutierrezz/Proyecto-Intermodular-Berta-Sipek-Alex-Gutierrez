@@ -1,0 +1,40 @@
+---
+# TODO DE UNA VEZ: dominio cibernova.local con DC01 (primario) y DC02 (secundario)
+# replicando entre sí, OUs, servidores unidos, DHCP con failover, red de clientes y
+# comprobación final (dcdiag + repadmin).
+#
+#   ansible-playbook playbooks/cibernova-dominio.yml --ask-vault-pass
+#
+# Seguridad:
+#  - Antes de cambiar nada comprueba los 7 Windows y hace un snapshot "pre-ad" de cada uno.
+#  - Si falla cualquier máquina, se para TODO (any_errors_fatal), sin seguir a medias.
+#  - En Proxmox solo añade vmbr1.50; vmbr0 (la red del aula) y vmbr1.40/.100 no se tocan.
+# Es idempotente: si se corta a medias, se relanza el mismo comando y sigue donde estaba.
+# Tarda unos 30-40 minutos (DC01, DC02 y los miembros se reinician).
+
+- name: 0/8 Comprobaciones previas + snapshots pre-ad (para si algo no cuadra antes de tocar nada)
+  ansible.builtin.import_playbook: win-00-comprobaciones.yml
+
+- name: 1/8 Base de los Windows (IP, nombre, hora, ping)
+  ansible.builtin.import_playbook: win-01-base.yml
+
+- name: 2/8 DC01 - bosque cibernova.local y DNS
+  ansible.builtin.import_playbook: ad-01-dc01-bosque.yml
+
+- name: 3/8 DC02 - segundo controlador sincronizado con DC01
+  ansible.builtin.import_playbook: ad-02-dc02-replica.yml
+
+- name: 4/8 OUs y directiva de contraseñas
+  ansible.builtin.import_playbook: ad-03-estructura.yml
+
+- name: 5/8 Servidores miembro al dominio
+  ansible.builtin.import_playbook: ad-04-unir-servidores.yml
+
+- name: 6/8 DHCP01/DHCP02 con failover
+  ansible.builtin.import_playbook: dhcp-01-failover.yml
+
+- name: 7/8 VLAN 50 de clientes y relay DHCP en Proxmox
+  ansible.builtin.import_playbook: proxmox-vlan50-relay.yml
+
+- name: 8/8 Comprobación final (AD, replicación, DNS y DHCP)
+  ansible.builtin.import_playbook: ad-99-verificar.yml

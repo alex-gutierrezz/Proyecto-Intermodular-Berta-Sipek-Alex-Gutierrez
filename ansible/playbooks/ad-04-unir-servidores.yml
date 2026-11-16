@@ -1,0 +1,35 @@
+---
+# Une DHCP01, DHCP02, FILES01, FILES02 y BACKUP01 al dominio, dentro de OU=Servidores.
+# Antes cambia su DNS a los dos DC (sin eso no encuentran el dominio).
+- name: Unir los servidores miembro al dominio
+  hosts: miembros
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: DNS = DC01 y DC02
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers: "{{ dns_internos }}"
+
+    - name: Unir al dominio en OU=Servidores (reinicia el servidor)
+      microsoft.ad.membership:
+        dns_domain_name: "{{ ad_dominio }}"
+        hostname: "{{ equipo }}"
+        domain_admin_user: "{{ ad_admin_upn }}"
+        domain_admin_password: "{{ vault_win_admin_password }}"
+        domain_ou_path: "OU=Servidores,OU=CiberNova,{{ ad_dn }}"
+        state: domain
+        reboot: true
+
+    - name: Comprobar el canal seguro con el dominio
+      ansible.windows.win_powershell:
+        script: |
+          if (-not (Test-ComputerSecureChannel)) { throw 'Canal seguro con el dominio roto' }
+          "$env:COMPUTERNAME -> $((Get-CimInstance Win32_ComputerSystem).Domain)"
+          $Ansible.Changed = $false
+      register: dominio
+
+    - name: Resultado
+      ansible.builtin.debug:
+        msg: "{{ dominio.output[0] }}"
