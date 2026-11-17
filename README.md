@@ -3,7 +3,7 @@
 Infraestructura virtualizada, redundante y documentada para CiberNova Solutions (89 empleados, sedes en Barcelona, Madrid y Valencia).
 
 **Equipo:** Berta Sipek y Alex Gutiérrez (ASIR)
-**Fase actual:** Fase 1 · Infraestructura (entrega interna 15/12/2026)
+**Fase actual:** Fase 1 · Infraestructura (entrega interna 4/12/2026)
 
 ## Índice del repositorio
 
