@@ -1,0 +1,100 @@
+---
+# DC02: se une al dominio y se promueve como segundo controlador (réplica de DC01,
+# también con DNS). Así AD y DNS no dependen de una sola máquina.
+# Al final, cada DC usa al otro como DNS preferido y a sí mismo como alternativo.
+#
+# IMPORTANTE: a partir de aquí NO restauréis snapshots antiguos de DC01 ni de DC02
+# (riesgo de USN rollback). Borrad el snapshot "instalado-limpio" de los dos DC.
+- name: DC02 - Segundo controlador de dominio
+  hosts: cn-dc02
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: DNS apuntando a DC01 (necesario para encontrar el dominio)
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ dc01_ip }}"
+
+    - name: Comprobar que DC02 resuelve el dominio
+      ansible.windows.win_powershell:
+        parameters:
+          Dominio: "{{ ad_dominio }}"
+        script: |
+          param([string]$Dominio)
+          Resolve-DnsName "_ldap._tcp.dc._msdcs.$Dominio" -Type SRV -ErrorAction Stop | Out-Null
+          $Ansible.Changed = $false
+
+    - name: Instalar Servicios de dominio de AD y DNS (con herramientas)
+      ansible.windows.win_feature:
+        name: [AD-Domain-Services, DNS]
+        include_management_tools: true
+      register: roles_ad
+
+    - name: Reiniciar si la instalación de roles lo pide
+      ansible.windows.win_reboot:
+      when: roles_ad.reboot_required
+
+    - name: Promover DC02 como controlador adicional con DNS (reinicia el servidor)
+      microsoft.ad.domain_controller:
+        dns_domain_name: "{{ ad_dominio }}"
+        domain_admin_user: "{{ ad_admin_upn }}"
+        domain_admin_password: "{{ vault_win_admin_password }}"
+        safe_mode_password: "{{ vault_dsrm_password }}"
+        replication_source_dc: "{{ dc01_fqdn }}"
+        install_dns: true
+        state: domain_controller
+        reboot: true
+        reboot_timeout: 1800
+
+- name: DNS cruzado entre los dos controladores
+  hosts: dc
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: DNS preferido = el otro DC, alternativo = él mismo
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ dc02_ip if equipo == 'DC01' else dc01_ip }}"
+          - 127.0.0.1
+
+    - name: Reenviadores DNS también en DC02
+      ansible.windows.win_powershell:
+        parameters:
+          Reenviadores: "{{ dns_reenviadores }}"
+        script: |
+          param([string[]]$Reenviadores)
+          $actuales = @((Get-DnsServerForwarder).IPAddress | ForEach-Object { $_.IPAddressToString })
+          if (($actuales -join ',') -ne ($Reenviadores -join ',')) {
+              Set-DnsServerForwarder -IPAddress $Reenviadores
+          } else {
+              $Ansible.Changed = $false
+          }
+      when: equipo == 'DC02'
+
+    - name: Forzar una replicación entre los DC
+      ansible.windows.win_command: repadmin /syncall /AdeP
+      changed_when: false
+      when: equipo == 'DC01'
+
+    - name: Esperar a que DC02 replique sin errores con DC01
+      ansible.windows.win_powershell:
+        script: |
+          $m = Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME -Scope Server -ErrorAction Stop
+          if (-not $m -or ($m | Where-Object LastReplicationResult -ne 0)) { throw 'La replicación todavía no está al día' }
+          if (-not (Get-SmbShare -Name SYSVOL -ErrorAction SilentlyContinue)) { throw 'SYSVOL aún no está compartido' }
+          $m | ForEach-Object { "Socio: $($_.Partner) - última replicación correcta: $($_.LastReplicationSuccess)" }
+          $Ansible.Changed = $false
+      register: replicacion
+      until: replicacion is succeeded
+      retries: 20
+      delay: 30
+      when: equipo == 'DC02'
+
+    - name: Estado de la sincronización
+      ansible.builtin.debug:
+        msg: "{{ replicacion.output }}"
+      when: equipo == 'DC02'

@@ -1,0 +1,50 @@
+---
+# Red de clientes en Proxmox: VLAN 50 (192.168.50.1/24) con NAT y relay DHCP hacia
+# DHCP01 y DHCP02 (lo que en la empresa haría el switch de capa 3 con ip helper-address).
+- name: Proxmox - VLAN 50 de clientes y relay DHCP
+  hosts: proxmox
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Interfaz vmbr1.50 con NAT (copia de seguridad automática del fichero)
+      ansible.builtin.blockinfile:
+        path: /etc/network/interfaces
+        backup: true
+        marker: "# {mark} CIBERNOVA VLAN 50 CLIENTES (Ansible)"
+        block: |
+          auto vmbr1.50
+          iface vmbr1.50 inet static
+              address 192.168.50.1/24
+              post-up iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o vmbr0 -j MASQUERADE
+              post-down iptables -t nat -D POSTROUTING -s 192.168.50.0/24 -o vmbr0 -j MASQUERADE
+      register: interfaces
+
+    - name: Levantar SOLO vmbr1.50, sin recargar el resto de la red (no es handler porque dnsmasq la necesita ya)  # noqa: no-handler
+      ansible.builtin.command: ifup vmbr1.50
+      when: interfaces.changed
+      changed_when: true
+
+    - name: Instalar dnsmasq (se usa solo como relay DHCP)
+      ansible.builtin.apt:
+        name: dnsmasq
+        state: present
+        update_cache: true
+
+    - name: Configuración del relay (port=0 desactiva su DNS)
+      ansible.builtin.copy:
+        dest: /etc/dnsmasq.d/relay-cibernova.conf
+        mode: "0644"
+        content: |
+          port=0
+          interface=vmbr1.50
+          bind-interfaces
+          dhcp-relay=192.168.50.1,192.168.40.12
+          dhcp-relay=192.168.50.1,192.168.40.13
+      register: relay
+
+    - name: Servicio dnsmasq activo y arrancado con el arranque
+      ansible.builtin.systemd_service:
+        name: dnsmasq
+        state: "{{ 'restarted' if relay.changed else 'started' }}"
+        enabled: true

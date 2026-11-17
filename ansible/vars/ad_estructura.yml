@@ -1,0 +1,54 @@
+---
+# Estructura de OUs del diseño del Grupo 7 (borrador de Berta, 12/11) para cibernova.local:
+#
+#   OU=CiberNova
+#   ├── OU=Usuarios
+#   │   └── Direccion, Administracion, RRHH, Comercial, Marketing,
+#   │       Consultoria, Desarrollo, Sistemas, Soporte, Legal   (becarios en la de su dpto)
+#   ├── OU=Cuentas_Admin        (adm.<usuario>)
+#   ├── OU=Cuentas_Servicio     (svc_backup, svc_web, svc_bbdd, svc_ia)
+#   ├── OU=Cuentas_Especiales   (recepcion.bcn, auditor.ext)
+#   ├── OU=Bajas                (las bajas se deshabilitan y se mueven aquí, nunca se borran)
+#   ├── OU=Grupos
+#   │   ├── OU=Globales         (G_...)
+#   │   └── OU=DominioLocal     (DL_...)
+#   ├── OU=Equipos
+#   │   ├── OU=Puestos          (destino por defecto de los equipos nuevos: redircmp)
+#   │   └── OU=Recepcion
+#   └── OU=Servidores           (AÑADIDA: DHCP01/02, FILES01/02, BACKUP, para sus GPO)
+#
+# Usuarios, grupos y contraseñas NO se crean aquí: los crea el script que lee
+# usuarios_cibernova.csv (semana 3), como pide el Anexo I.
+
+departamentos:
+  - Direccion
+  - Administracion
+  - RRHH
+  - Comercial
+  - Marketing
+  - Consultoria
+  - Desarrollo
+  - Sistemas
+  - Soporte
+  - Legal
+
+# OU de primer nivel dentro de CiberNova, con sus hijas
+ous:
+  - { nombre: Usuarios,           hijas: "{{ departamentos }}" }
+  - { nombre: Cuentas_Admin,      hijas: [] }
+  - { nombre: Cuentas_Servicio,   hijas: [] }
+  - { nombre: Cuentas_Especiales, hijas: [] }
+  - { nombre: Bajas,              hijas: [] }
+  - { nombre: Grupos,             hijas: [Globales, DominioLocal] }
+  - { nombre: Equipos,            hijas: [Puestos, Recepcion] }
+  - { nombre: Servidores,         hijas: [] }
+
+# Directiva de contraseñas por defecto del dominio (Anexo I).
+# Los 15 caracteres de Dirección, Sistemas y adm. van en una PSO aparte (semana 3),
+# cuando existan sus grupos.
+politica_contrasenas:
+  longitud_minima: 12
+  historial: 10
+  caducidad_dias: 90
+  bloqueo_intentos: 5
+  bloqueo_minutos: 15

@@ -1,4 +1,12 @@
 # Colecciones necesarias. Instalar con:
 #   ansible-galaxy collection install -r requirements.yml --upgrade
 collections:
+  # Checkmk: alta de hosts por la API REST (checkmk-agente.yml)
   - name: checkmk.general
+  # Windows y Active Directory (playbooks win-*, ad-* y dhcp-*)
+  - name: ansible.windows
+    version: ">=3.9.1"      # desde la 3.9.1 incluye win_dns_zone y win_dns_record
+  - name: community.windows
+    version: ">=3.0.0"
+  - name: microsoft.ad
+    version: ">=1.9.0"

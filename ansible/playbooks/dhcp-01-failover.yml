@@ -1,0 +1,136 @@
+---
+# DHCP con alta disponibilidad: rol DHCP en DHCP01 y DHCP02, los dos autorizados en AD,
+# ámbitos creados en DHCP01 y failover en modo "equilibrio de carga" 50/50 con DHCP02.
+# El failover copia los ámbitos y sus opciones a DHCP02: no hay que crearlos dos veces.
+# Requisito: ad-04-unir-servidores.yml ya ejecutado (los dos DHCP en el dominio).
+
+- name: DHCP - Rol y autorización en los dos servidores
+  hosts: dhcp
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Instalar el rol DHCP con su consola
+      ansible.windows.win_feature:
+        name: DHCP
+        include_management_tools: true
+      register: rol
+
+    - name: Reiniciar si la instalación lo pide
+      ansible.windows.win_reboot:
+      when: rol.reboot_required
+
+    - name: Grupos de seguridad de DHCP y fin del asistente posterior a la instalación
+      ansible.windows.win_powershell:
+        script: |
+          $clave = 'HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12'
+          if ((Get-ItemProperty $clave -ErrorAction SilentlyContinue).ConfigurationState -eq 2) {
+              $Ansible.Changed = $false; return
+          }
+          Add-DhcpServerSecurityGroup
+          Restart-Service DHCPServer
+          Set-ItemProperty -Path $clave -Name ConfigurationState -Value 2
+
+    - name: Autorizar el servidor DHCP en Active Directory
+      ansible.windows.win_powershell:
+        parameters:
+          Dominio: "{{ ad_dominio }}"
+          Ip: "{{ ansible_host }}"
+        script: |
+          param([string]$Dominio, [string]$Ip)
+          $fqdn = "$($env:COMPUTERNAME).$Dominio".ToLower()
+          if (Get-DhcpServerInDC | Where-Object { $_.DnsName -eq $fqdn }) {
+              $Ansible.Changed = $false; return
+          }
+          Add-DhcpServerInDC -DnsName $fqdn -IPAddress $Ip
+      become: true
+
+- name: DHCP - Ámbitos y failover (desde DHCP01)
+  hosts: cn-dhcp01
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Crear los ámbitos y sus opciones (puerta de enlace, DNS, dominio)
+      ansible.windows.win_powershell:
+        parameters:
+          Ambitos: "{{ dhcp_ambitos }}"
+          DnsInternos: "{{ dns_internos }}"
+          Dominio: "{{ ad_dominio }}"
+        script: |
+          param($Ambitos, [string[]]$DnsInternos, [string]$Dominio)
+          $Ansible.Changed = $false
+          foreach ($a in $Ambitos) {
+              $id = $a.red
+              if (-not (Get-DhcpServerv4Scope -ScopeId $id -ErrorAction SilentlyContinue)) {
+                  Add-DhcpServerv4Scope -Name $a.nombre -StartRange $a.inicio -EndRange $a.fin `
+                      -SubnetMask 255.255.255.0 -LeaseDuration ([TimeSpan]::Parse($a.concesion)) -State Active
+                  $Ansible.Changed = $true
+              }
+              $gw  = ($a.red -replace '\.0$', '.1')
+              $dns = $DnsInternos
+
+              $actualGw  = (Get-DhcpServerv4OptionValue -ScopeId $id -OptionId 3 -ErrorAction SilentlyContinue).Value -join ','
+              $actualDns = (Get-DhcpServerv4OptionValue -ScopeId $id -OptionId 6 -ErrorAction SilentlyContinue).Value -join ','
+              $actualDom = (Get-DhcpServerv4OptionValue -ScopeId $id -OptionId 15 -ErrorAction SilentlyContinue).Value -join ','
+
+              if ($actualGw -ne $gw -or $actualDns -ne ($dns -join ',')) {
+                  Set-DhcpServerv4OptionValue -ScopeId $id -Router $gw -DnsServer $dns -Force
+                  $Ansible.Changed = $true
+              }
+              if ($actualDom -ne $Dominio) {
+                  Set-DhcpServerv4OptionValue -ScopeId $id -DnsDomain $Dominio -Force
+                  $Ansible.Changed = $true
+              }
+          }
+      register: ambitos
+
+    - name: Failover DHCP01 <-> DHCP02 (equilibrio de carga 50/50)
+      ansible.windows.win_powershell:
+        parameters:
+          Nombre: "{{ dhcp_failover_nombre }}"
+          Socio: "{{ dhcp_secundario_fqdn }}"
+          Secreto: "{{ vault_dhcp_failover_secreto }}"
+          Redes: "{{ dhcp_ambitos | map(attribute='red') | list }}"
+        script: |
+          param([string]$Nombre, [string]$Socio, [string]$Secreto, [string[]]$Redes)
+          $fo = Get-DhcpServerv4Failover -Name $Nombre -ErrorAction SilentlyContinue
+          if (-not $fo) {
+              Add-DhcpServerv4Failover -Name $Nombre -PartnerServer $Socio -ScopeId $Redes `
+                  -LoadBalancePercent 50 -SharedSecret $Secreto `
+                  -MaxClientLeadTime (New-TimeSpan -Hours 1) `
+                  -AutoStateTransition $true -StateSwitchInterval (New-TimeSpan -Hours 1) -Force
+              return
+          }
+          $enFailover = @($fo.ScopeId | ForEach-Object { $_.IPAddressToString })
+          $faltan = @($Redes | Where-Object { $_ -notin $enFailover })
+          if ($faltan.Count -gt 0) {
+              Add-DhcpServerv4FailoverScope -Name $Nombre -ScopeId $faltan
+          } else {
+              $Ansible.Changed = $false
+          }
+      become: true
+      no_log: true    # lleva el secreto compartido
+      register: failover
+
+    - name: Replicar a DHCP02 los cambios de opciones de los ámbitos
+      ansible.windows.win_powershell:
+        parameters:
+          Nombre: "{{ dhcp_failover_nombre }}"
+        script: |
+          param([string]$Nombre)
+          Invoke-DhcpServerv4FailoverReplication -Name $Nombre -Force | Out-Null
+      become: true
+      when: ambitos.changed and not failover.changed
+
+    - name: Estado del failover
+      ansible.windows.win_powershell:
+        script: |
+          Get-DhcpServerv4Failover | Select-Object Name, PartnerServer, Mode, LoadBalancePercent, State,
+              @{n='Ambitos';e={($_.ScopeId | ForEach-Object { $_.IPAddressToString }) -join ', '}}
+          $Ansible.Changed = $false
+      register: estado
+
+    - name: Resultado
+      ansible.builtin.debug:
+        msg: "{{ estado.output }}"

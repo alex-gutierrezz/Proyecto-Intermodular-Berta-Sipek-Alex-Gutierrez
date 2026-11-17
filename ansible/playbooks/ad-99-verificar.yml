@@ -1,0 +1,69 @@
+---
+# Comprobaciones para la documentación y las capturas (no cambia nada).
+- name: Verificar AD, DNS y replicación
+  hosts: dc
+  gather_facts: false
+
+  tasks:
+    - name: Dominio, DCs y roles FSMO
+      ansible.windows.win_powershell:
+        script: |
+          $d = Get-ADDomain; $f = Get-ADForest
+          "Dominio: $($d.DNSRoot) ($($d.NetBIOSName)) - nivel $($d.DomainMode)"
+          "DCs: $((Get-ADDomainController -Filter *).HostName -join ', ')"
+          "PDC: $($d.PDCEmulator) | RID: $($d.RIDMaster) | Esquema: $($f.SchemaMaster)"
+          $Ansible.Changed = $false
+      register: ad
+      when: equipo == 'DC01'
+
+    - name: Diagnóstico del controlador (dcdiag /q -> sin salida = todo correcto)
+      ansible.windows.win_command: dcdiag /q
+      register: dcdiag
+      changed_when: false
+      failed_when: false
+
+    - name: Resumen de replicación
+      ansible.windows.win_command: repadmin /replsummary
+      register: repl
+      changed_when: false
+      when: equipo == 'DC01'
+
+    - name: Resolución DNS (interna y externa)
+      ansible.windows.win_powershell:
+        parameters:
+          Dominio: "{{ ad_dominio }}"
+        script: |
+          param([string]$Dominio)
+          foreach ($n in "dc01.$Dominio", "dc02.$Dominio", "db01.$Dominio", "web01.$Dominio", "www.google.com") {
+              $r = Resolve-DnsName $n -Type A -ErrorAction SilentlyContinue | Where-Object IPAddress | Select-Object -First 1
+              "{0,-30} {1}" -f $n, $(if ($r) { $r.IPAddress } else { 'NO RESUELVE' })
+          }
+          $Ansible.Changed = $false
+      register: dns
+
+    - name: Resultados
+      ansible.builtin.debug:
+        msg:
+          ad: "{{ ad.output | default('-') }}"
+          dcdiag: "{{ dcdiag.stdout_lines | default([]) | select | list or 'OK (sin errores)' }}"
+          replicacion: "{{ repl.stdout_lines | default('-') }}"
+          dns: "{{ dns.output }}"
+
+- name: Verificar DHCP
+  hosts: dhcp
+  gather_facts: false
+
+  tasks:
+    - name: Ámbitos, estado y concesiones
+      ansible.windows.win_powershell:
+        script: |
+          Get-DhcpServerv4Scope | ForEach-Object {
+              $s = Get-DhcpServerv4ScopeStatistics -ScopeId $_.ScopeId
+              "{0,-15} {1,-24} {2,-8} libres={3} en uso={4}" -f $_.ScopeId, $_.Name, $_.State, $s.Free, $s.InUse
+          }
+          $Ansible.Changed = $false
+      register: ambitos
+
+    - name: Resultados
+      ansible.builtin.debug:
+        msg: "{{ ambitos.output }}"

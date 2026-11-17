@@ -1,0 +1,81 @@
+---
+# Configuración base común a los 7 Windows, ANTES de crear el dominio:
+# IP fija definitiva, nombre del equipo, zona horaria y ping (ICMP) permitido.
+# Si algo ya está hecho a mano (Rename-Computer, IP...), esa tarea sale "ok" sin cambios.
+- name: Base de los servidores Windows
+  hosts: windows
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    # --- IP definitiva (solo en los servidores con ip_actual en el inventario) ---
+    - name: Cambiar a la IP definitiva
+      when: ip_actual is defined and ip_actual != ansible_host
+      block:
+        - name: Guardar la IP definitiva y entrar por la actual
+          ansible.builtin.set_fact:
+            ip_definitiva: "{{ ansible_host }}"
+            ansible_host: "{{ ip_actual }}"
+
+        - name: Poner la IP definitiva (en segundo plano, porque se corta la conexión)
+          ansible.windows.win_shell: |
+            Start-Sleep -Seconds 3
+            $nic = (Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1).Name
+            Get-NetIPAddress -InterfaceAlias $nic -AddressFamily IPv4 | Remove-NetIPAddress -Confirm:$false
+            Get-NetRoute -InterfaceAlias $nic -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+                Remove-NetRoute -Confirm:$false
+            New-NetIPAddress -InterfaceAlias $nic -IPAddress {{ ip_definitiva }} -PrefixLength 24 `
+                -DefaultGateway {{ gw_servidores }}
+          async: 60
+          poll: 0
+          changed_when: true
+
+        - name: Seguir por la IP definitiva
+          ansible.builtin.set_fact:
+            ansible_host: "{{ ip_definitiva }}"
+
+        - name: Esperar a que responda en la IP definitiva
+          ansible.builtin.wait_for_connection:
+            delay: 10
+            timeout: 120
+
+    - name: Comprobar conexión WinRM
+      ansible.windows.win_ping:
+
+    - name: Nombre del equipo
+      ansible.windows.win_hostname:
+        name: "{{ equipo }}"
+      register: nombre
+
+    - name: Reiniciar si ha cambiado el nombre
+      ansible.windows.win_reboot:
+      when: nombre.reboot_required
+
+    - name: Zona horaria de Madrid
+      ansible.windows.win_timezone:
+        timezone: Romance Standard Time
+
+    - name: Permitir ping (ICMPv4) en el firewall de Windows
+      ansible.windows.win_powershell:
+        script: |
+          $regla = Get-NetFirewallRule -Name 'CN-ICMPv4-In' -ErrorAction SilentlyContinue
+          if ($regla) {
+              $Ansible.Changed = $false
+          } else {
+              New-NetFirewallRule -Name 'CN-ICMPv4-In' -DisplayName 'CiberNova - Ping ICMPv4 entrante' `
+                  -Protocol ICMPv4 -IcmpType 8 -Direction Inbound -Action Allow -Profile Any | Out-Null
+          }
+
+    - name: Comprobar IP y puerta de enlace
+      ansible.windows.win_powershell:
+        script: |
+          Get-NetIPConfiguration | Where-Object IPv4DefaultGateway |
+              Select-Object @{n='IP';e={$_.IPv4Address.IPAddress}},
+                            @{n='Gateway';e={$_.IPv4DefaultGateway.NextHop}},
+                            @{n='DNS';e={$_.DNSServer.ServerAddresses -join ', '}}
+          $Ansible.Changed = $false
+      register: red
+
+    - name: Resumen de red
+      ansible.builtin.debug:
+        msg: "{{ equipo }} -> {{ red.output }}"

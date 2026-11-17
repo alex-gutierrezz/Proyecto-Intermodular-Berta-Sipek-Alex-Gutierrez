@@ -1,0 +1,112 @@
+---
+# DC01: crea el bosque y el dominio cibernova.local con DNS integrado en AD,
+# y deja el DNS listo: reenviadores, zonas inversas y registros de los servidores Linux.
+# También configura DC01 como fuente de hora (NTP) del dominio.
+- name: DC01 - Nuevo bosque cibernova.local
+  hosts: cn-dc01
+  gather_facts: false
+  any_errors_fatal: true
+
+  vars:
+    # Zonas inversas: VLAN 40 (servidores), 50 (clientes, propuesta) y 100 (DMZ)
+    zonas_inversas: [40, 50, 100]
+    # Registros A + PTR de lo que no es Windows (los Windows se registran solos)
+    registros_dns:
+      - { nombre: proxmoxab, ip: 192.168.40.1 }
+      - { nombre: ansible, ip: 192.168.40.5 }
+      - { nombre: cmk, ip: 192.168.40.20 }
+      - { nombre: db01, ip: 192.168.40.40 }
+      - { nombre: db02, ip: 192.168.40.41 }
+      - { nombre: web01, ip: 192.168.100.30 }
+      - { nombre: web02, ip: 192.168.100.31 }
+
+  tasks:
+    - name: Instalar Servicios de dominio de AD y DNS (con herramientas)
+      ansible.windows.win_feature:
+        name: [AD-Domain-Services, DNS]
+        include_management_tools: true
+      register: roles_ad
+
+    - name: Reiniciar si la instalación de roles lo pide
+      ansible.windows.win_reboot:
+      when: roles_ad.reboot_required
+
+    - name: Crear el bosque y promover DC01 (reinicia el servidor)
+      microsoft.ad.domain:
+        dns_domain_name: "{{ ad_dominio }}"
+        domain_netbios_name: "{{ ad_netbios }}"
+        safe_mode_password: "{{ vault_dsrm_password }}"
+        install_dns: true
+        reboot: true
+        reboot_timeout: 1800
+
+    - name: Esperar a que AD responda tras el reinicio
+      ansible.windows.win_powershell:
+        script: |
+          $fin = (Get-Date).AddMinutes(10)
+          do {
+              try { Get-ADDomain -ErrorAction Stop | Out-Null; $ok = $true }
+              catch { $ok = $false; Start-Sleep -Seconds 15 }
+          } until ($ok -or (Get-Date) -gt $fin)
+          if (-not $ok) { throw 'Active Directory no responde en DC01' }
+          $Ansible.Changed = $false
+
+    - name: Reenviadores DNS
+      ansible.windows.win_powershell:
+        parameters:
+          Reenviadores: "{{ dns_reenviadores }}"
+        script: |
+          param([string[]]$Reenviadores)
+          $actuales = @((Get-DnsServerForwarder).IPAddress | ForEach-Object { $_.IPAddressToString })
+          if (($actuales -join ',') -ne ($Reenviadores -join ',')) {
+              Set-DnsServerForwarder -IPAddress $Reenviadores
+          } else {
+              $Ansible.Changed = $false
+          }
+
+    - name: Zonas de búsqueda inversa (integradas en AD, replicación a todo el bosque)
+      ansible.windows.win_dns_zone:
+        name: "{{ item }}.168.192.in-addr.arpa"
+        type: primary
+        replication: forest
+        dynamic_update: secure
+      loop: "{{ zonas_inversas }}"
+
+    - name: Registros A de los servidores Linux y de Proxmox
+      ansible.windows.win_dns_record:
+        zone: "{{ ad_dominio }}"
+        name: "{{ item.nombre }}"
+        type: A
+        value: "{{ item.ip }}"
+      loop: "{{ registros_dns }}"
+      loop_control:
+        label: "{{ item.nombre }}"
+
+    - name: Registros PTR de los servidores Linux y de Proxmox
+      ansible.windows.win_dns_record:
+        zone: "{{ item.ip.split('.')[2] }}.168.192.in-addr.arpa"
+        name: "{{ item.ip.split('.')[3] }}"
+        type: PTR
+        value: "{{ item.nombre }}.{{ ad_dominio }}"
+      loop: "{{ registros_dns }}"
+      loop_control:
+        label: "{{ item.ip }}"
+
+    - name: DC01 como servidor de hora fiable del dominio (emulador PDC)
+      ansible.windows.win_powershell:
+        parameters:
+          Ntp: "{{ ntp_externo }}"
+        script: |
+          param([string]$Ntp)
+          $actual = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Parameters').NtpServer
+          if ($actual -eq $Ntp) { $Ansible.Changed = $false; return }
+          w32tm /config /manualpeerlist:"$Ntp" /syncfromflags:manual /reliable:yes /update | Out-Null
+          Restart-Service w32time
+          w32tm /resync /nowait | Out-Null
+
+    - name: DNS del propio DC01 (de momento solo él mismo; cuando exista DC02 se añade)
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ dc01_ip }}"
+          - 127.0.0.1

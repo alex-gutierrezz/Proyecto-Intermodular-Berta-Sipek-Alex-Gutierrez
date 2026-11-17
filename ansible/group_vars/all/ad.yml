@@ -1,0 +1,28 @@
+---
+# Dominio de CiberNova (un único bosque con un dominio y dos controladores).
+ad_dominio: cibernova.local
+ad_netbios: CIBERNOVA
+ad_dn: "DC=cibernova,DC=local"
+
+# Cuenta de administración del dominio
+ad_admin_upn: "Administrador@{{ ad_dominio }}"
+ad_admin_runas: "{{ ad_netbios }}\\Administrador"
+
+# Controladores de dominio / DNS
+dc01_ip: 192.168.40.10
+dc02_ip: 192.168.40.11
+dc01_fqdn: "dc01.{{ ad_dominio }}"
+dns_internos:
+  - "{{ dc01_ip }}"
+  - "{{ dc02_ip }}"
+
+# Reenviadores DNS (el DNS del centro, 192.168.200.254, no responde desde el laboratorio)
+dns_reenviadores:
+  - 8.8.8.8
+  - 1.1.1.1
+
+# Servidores NTP externos para DC01 (emulador PDC, la fuente de hora de todo el dominio)
+ntp_externo: "0.es.pool.ntp.org,0x8 1.es.pool.ntp.org,0x8"
+
+# Puerta de enlace de la VLAN 40 (Proxmox)
+gw_servidores: 192.168.40.1
