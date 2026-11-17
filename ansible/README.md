@@ -17,7 +17,6 @@ Automatización de la infraestructura de la Fase 1: monitorización con Checkmk 
 5. [Cómo ejecutarlo](#5-cómo-ejecutarlo)
 6. [Gestión de secretos (Ansible Vault)](#6-gestión-de-secretos-ansible-vault)
 7. [Riesgos conocidos](#7-riesgos-conocidos)
-8. [Diferencias con la VM Ansible](#8-diferencias-con-la-vm-ansible)
 
 ---
 
