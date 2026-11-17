@@ -1,5 +1,5 @@
 digraph red {
-graph [rankdir=TB, compound=true, fontname="Inter", bgcolor="#f7f8fa", pad=0.5, nodesep=0.3, ranksep=0.6, splines=ortho,
+graph [rankdir=LR, compound=true, fontname="Inter", bgcolor="#ffffff", pad=0.5, nodesep=0.3, ranksep=0.6, splines=spline,
  label=<<FONT POINT-SIZE="20" COLOR="#1a202c"><B>CiberNova</B></FONT><FONT POINT-SIZE="20" COLOR="#718096">  ·  Red de la Fase 1</FONT><BR/><FONT POINT-SIZE="11" COLOR="#718096">proxmoxAB · 16/11/2026</FONT>>, labelloc=t, labeljust=l];
 node [fontname="Inter", shape=plain];
 edge [fontname="Inter", fontsize=9, color="#a0aec0", fontcolor="#718096", penwidth=1.6, arrowsize=0.7];
@@ -7,7 +7,7 @@ edge [fontname="Inter", fontsize=9, color="#a0aec0", fontcolor="#718096", penwid
 aula [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff" STYLE="ROUNDED"><TR><TD BGCOLOR="#4a5568" ALIGN="LEFT"><FONT COLOR="white" POINT-SIZE="11"><B>🌐  Red del aula</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">192.168.200.0/22</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">Gateway / Internet: 192.168.200.254</FONT></TD></TR></TABLE>>];
 subgraph cluster_pve {
 label=<<FONT POINT-SIZE="13" COLOR="#1a202c"><B>proxmoxAB · Proxmox VE 9.2.2</B></FONT><BR/><FONT POINT-SIZE="10" COLOR="#718096">2x Xeon E5-2620 v2 · 128 GB RAM · 4x900 GB RAID 10</FONT>>;
-style="rounded,filled"; fillcolor="#ffffff"; color="#cbd5e0"; penwidth=1.5; labeljust=l; margin=18;
+style="rounded,filled"; fillcolor="#fbfbfd"; color="#cbd5e0"; penwidth=1.5; labeljust=l; margin=18;
 vmbr0 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff" STYLE="ROUNDED"><TR><TD BGCOLOR="#3182ce" ALIGN="LEFT"><FONT COLOR="white" POINT-SIZE="11"><B>vmbr0 · nic1</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">192.168.202.7/22</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">https://192.168.202.7:8006</FONT></TD></TR></TABLE>>];
 nat [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff" STYLE="ROUNDED"><TR><TD BGCOLOR="#d69e2e" ALIGN="LEFT"><FONT COLOR="white" POINT-SIZE="11"><B>Router + NAT</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">MASQUERADE</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">ip_forward = 1</FONT></TD></TR></TABLE>>];
 vmbr1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff" STYLE="ROUNDED"><TR><TD BGCOLOR="#3182ce" ALIGN="LEFT"><FONT COLOR="white" POINT-SIZE="11"><B>vmbr1 · bridge interno</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">VLAN-aware</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10" COLOR="#1a202c">sin puertos físicos</FONT></TD></TR></TABLE>>];
@@ -70,11 +70,14 @@ n110 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" BG
 <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="13" COLOR="#1a202c"><B>.50</B></FONT></TD></TR>
 <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9" COLOR="#2b6cb0">WS2025</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="150" HEIGHT="20"><FONT POINT-SIZE="9" COLOR="#718096"> </FONT></TD></TR>
 </TABLE>>];
-{rank=same; n111; n100; n101; n102; n104; n112;}
-n111 -> n100 -> n101 -> n102 -> n104 -> n112 [style=invis];
-{rank=same; n108; n109; n106; n107; n110;}
-n108 -> n109 -> n106 -> n107 -> n110 [style=invis];
-n111 -> n108 [style=invis];
+{rank=same; n102; n101; n100; n111;}
+n102 -> n101 -> n100 -> n111 [style=invis];
+{rank=same; n109; n108; n112; n104;}
+n109 -> n108 -> n112 -> n104 [style=invis];
+{rank=same; n110; n107; n106;}
+n110 -> n107 -> n106 [style=invis];
+n111 -> n104 [style=invis];
+n104 -> n106 [style=invis];
 }
 subgraph cluster_vlan100 { label=<<FONT POINT-SIZE="12" COLOR="#dd6b20"><B>VLAN 100 · DMZ</B></FONT><BR/><FONT POINT-SIZE="10" COLOR="#718096">192.168.100.0/24 · tag 100</FONT>>;
 style="rounded,filled"; fillcolor="#fffaf0"; color="#dd6b20"; penwidth=1.5; labeljust=l; margin=14;
@@ -89,13 +92,13 @@ n105 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" BG
 <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9" COLOR="#c05621">Ubuntu</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="150" HEIGHT="20"><FONT POINT-SIZE="9" COLOR="#718096">Web + SFTP</FONT></TD></TR>
 </TABLE>>];
 n103 -> n105 [style=invis]; }
-tpl [label=<<TABLE BORDER="1" COLOR="#718096" STYLE="ROUNDED,DASHED" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD><FONT POINT-SIZE="10" COLOR="#718096"><B>VM 9000 · ubuntu-2404-tpl</B><BR/>Plantilla cloud-init (sin red)</FONT></TD></TR></TABLE>>];
+tpl [label=<<TABLE BORDER="1" COLOR="#718096" STYLE="ROUNDED,DASHED" CELLPADDING="6" BGCOLOR="#fbfbfd"><TR><TD><FONT POINT-SIZE="10" COLOR="#718096"><B>VM 9000 · ubuntu-2404-tpl</B><BR/>Plantilla cloud-init (sin red)</FONT></TD></TR></TABLE>>];
 }
 aula -> vmbr0 [dir=both, label="  salida al aula  "];
 vmbr0 -> nat [dir=both];
 nat -> v40 [dir=both, color="#2f855a"]; nat -> v100 [dir=both, color="#dd6b20"];
 vmbr1 -> v40 [style=dashed, arrowhead=none]; vmbr1 -> v100 [style=dashed, arrowhead=none];
-v40 -> n102 [lhead=cluster_vlan40, label="  gateway  ", color="#2f855a"];
+v40 -> n100 [lhead=cluster_vlan40, label="  gateway  ", color="#2f855a"];
 v100 -> n103 [lhead=cluster_vlan100, label="  gateway  ", color="#dd6b20"];
 vmbr1 -> tpl [style=invis];
 }
