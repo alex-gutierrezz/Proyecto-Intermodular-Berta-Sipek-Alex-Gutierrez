@@ -1,6 +1,43 @@
 # Fase 1 — Infraestructura CiberNova (Documentación)
 
-**Grupo 7:** Berta Sipek y Alex Gutiérrez · **Actualizado:** 16/11/2026
+**Grupo 7:** Berta Sipek y Alex Gutiérrez · **Actualizado:** 18/11/2026
+
+## Índice
+
+1. [Introducción y alcance](#1-introducción-y-alcance)
+2. [Calendario original](#2-calendario-original)
+3. [Diario de trabajo (bitácora)](#3-diario-de-trabajo-bitácora)
+4. [Desfases respecto al calendario](#4-desfases-respecto-al-calendario)
+   - [Detalle de D2: preparación del servidor e instalación de Proxmox](#detalle-de-d2-preparación-del-servidor-e-instalación-de-proxmox)
+   - [Detalle de D7: Ansible sobre las VMs Windows](#detalle-de-d7-ansible-sobre-las-vms-windows)
+   - [Por qué adelantamos Checkmk (D5)](#por-qué-adelantamos-checkmk-d5)
+5. [Diseño: decisiones tecnológicas](#5-diseño-decisiones-tecnológicas)
+6. [Diseño de red: VLANs, IPs y diagrama](#6-diseño-de-red-vlans-ips-y-diagrama)
+   - [6.1 Redes](#61-redes)
+   - [6.2 Plan de direccionamiento (VLAN 40)](#62-plan-de-direccionamiento-vlan-40)
+   - [6.3 Configuración en Proxmox](#63-configuración-en-proxmox)
+7. [Hipervisor Proxmox: guía de instalación reproducible](#7-hipervisor-proxmox-guía-de-instalación-reproducible)
+8. [Inventario de máquinas y servicios](#8-inventario-de-máquinas-y-servicios)
+9. [Automatización con Ansible](#9-automatización-con-ansible)
+   - [9.1 Plantilla cloud-init (VM 9000)](#91-plantilla-cloud-init-vm-9000)
+   - [9.2 Proyecto y control de acceso](#92-proyecto-y-control-de-acceso)
+   - [9.3 Inventario](#93-inventario)
+   - [9.4 Playbooks](#94-playbooks)
+   - [9.5 Detalle del playbook proxmox-vms-windows.yml](#95-detalle-del-playbook-proxmox-vms-windowsyml)
+10. [Monitorización con Checkmk](#10-monitorización-con-checkmk)
+11. [Servicios](#11-servicios)
+    - [11.1 Instalación de Windows Server 2025](#111-instalación-de-windows-server-2025-en-curso)
+    - [11.2 Preparación de DC01 y creación del dominio (16/11)](#112-preparación-de-dc01-y-creación-del-dominio-1611)
+12. [Problemas encontrados y soluciones](#12-problemas-encontrados-y-soluciones)
+13. [Redundancia y puntos únicos de fallo](#13-redundancia-y-puntos-únicos-de-fallo)
+14. [Plan para lo que queda de trimestre](#14-plan-para-lo-que-queda-de-trimestre)
+    - [14.1 Qué es cada tarea del plan y por qué está ahí](#141-qué-es-cada-tarea-del-plan-y-por-qué-está-ahí)
+    - [14.2 Reparto y entregas semanales](#142-reparto-y-entregas-semanales)
+15. [Anexos](#15-anexos)
+16. [Aprendizajes, pendientes y riesgos](#16-aprendizajes-pendientes-y-riesgos)
+    - [16.1 Aprendizajes](#161-aprendizajes)
+    - [16.2 Pendientes para la próxima sesión](#162-pendientes-para-la-próxima-sesión)
+    - [16.3 Riesgos y mejoras para las Fases 2 y 3](#163-riesgos-y-mejoras-para-las-fases-2-y-3)
 
 ## 1. Introducción y alcance
 
@@ -10,47 +47,79 @@ CiberNova Solutions es una consultora tecnológica ficticia de 89 empleados, con
   - Grupo 7, Berta Sipek y Alex Gutiérrez , servidor proxmoxAB (192.168.202.7).&#32;
   - Alex ejecuta la automatización y los servicios Linux (Ansible, Checkmk, web, BBDD y script del CSV);&#32;
   - Berta ejecuta Windows y el Anexo I (DC, DHCP, red de clientes, OU y permisos, GPO, DFS y copias).&#32;
-  - En cada tarea, quien no ejecuta la documenta en la misma sesión (sección 14.2).
+  - En cada tarea, quien no ejecuta la documenta en la misma sesión ([sección 14.2](#142-reparto-y-entregas-semanales)).
 - **Repositorio:** https://github.com/alex-gutierrezz/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez (el 12/11 se conectó el repositorio de Ansible de la VM Ansible a este remoto, pero el push no se completó), con las carpetas (`docs/`, `ansible/`, `scripts/`, `configs/`).
 - **Criterios de éxito:** las 15 pruebas de verificación del Anexo I y los servicios mínimos del enunciado funcionando.
 
 ## 2. Calendario original
 
-Este es el calendario que planteamos el 22/09, organizado por los 5 hitos del enunciado. Lo dejamos sin retocar para poder compararlo con lo que pasó después (sección 4).
+Este es el calendario que planteamos el 22/09, organizado por los 5 hitos del enunciado. Lo dejamos sin retocar para poder compararlo con lo que pasó después ([sección 4](#4-desfases-respecto-al-calendario)).
 
-| Hito | Tareas previstas | Fecha prevista inicio | Fecha prevista fin | Responsable |
-| --- | --- | --- | --- | --- |
-| 1. Análisis y diseño | Necesidades, plan de IPs, VLANs, elección de SO | 22/09/2026 | 01/10/2026 | Berta y Alex |
-| 2. Hipervisor | RAID, instalación Proxmox, red (bridges/VLANs) | 06/10/2026 | 15/10/2026 | Berta y Alex |
-| 3. Servicios core | AD/DNS, DHCP, web, SFTP, BBDD, ficheros/DFS, usuarios, backups | 20/10/2026 | 29/10/2026 | Berta y Alex |
-| 4. Redundancia y HA | DC02, DHCP failover, réplica BBDD, WEB02, DFS-R | 03/11/2026 | 12/11/2026 | Berta y Alex |
-| 5. Documentación y demo | Memoria, manuales, pruebas de verificación | 17/11/2026 | 26/11/2026 | Berta y Alex |
+| # | Hito | Tareas previstas | Fecha prevista inicio | Fecha prevista fin | Responsable |
+| --- | --- | --- | --- | --- | --- |
+| C1 | 1. Análisis y diseño | Necesidades, plan de IPs, VLANs, elección de SO | 22/09/2026 | 01/10/2026 | Berta y Alex |
+| C2 | 2. Hipervisor | RAID, instalación Proxmox, red (bridges/VLANs) | 06/10/2026 | 15/10/2026 | Berta y Alex |
+| C3 | 3. Servicios core | AD/DNS, DHCP, web, SFTP, BBDD, ficheros/DFS, usuarios, backups | 20/10/2026 | 29/10/2026 | Berta y Alex |
+| C4 | 4. Redundancia y HA | DC02, DHCP failover, réplica BBDD, WEB02, DFS-R | 03/11/2026 | 12/11/2026 | Berta y Alex |
+| C5 | 5. Documentación y demo | Memoria, manuales, pruebas de verificación | 17/11/2026 | 26/11/2026 | Berta y Alex |
 
+**WBS (desglose del trabajo).** Cada hito del calendario se divide en las tareas que hacen falta para completarlo:
 
+![WBS de la Fase 1: 5 hitos y 29 tareas](diagramas/wbs-fase1.png)
 
 ## 3. Diario de trabajo (bitácora)
 
 Anotamos una fila por cada sesión de clase, también las que no pudimos avanzar, para poder justificar los desfases.
 
-| Fecha | Trabajo realizado | Problemas / observaciones | Captura |
-| --- | --- | --- | --- |
-| 17/09/2026 | Brainstorming: qué queremos hacer y cómo enfocarlo | — | — (no se conserva) |
-| 22/09/2026 | Diseño y planificación inicial | — | Calendario original (sección 2) |
-| 24/09/2026 | Sin clase (festivo) | Sesión perdida | — |
-| 29/09/2026 | Clases canceladas por lluvia | Sesión perdida | — |
-| 06/10/2026 | Preparación del servidor  e intento de instalación de Proxmox | Errores en la instalación, máquina muy lenta | — (no se conserva; síntoma descrito en P1) |
-| 08/10/2026 | Intento de solucionar la instalación | Reinicios muy lentos; se cedió la pantalla a otro grupo | — |
-| 13/10/2026 | Configuración del RAID 10 (espejo + bandas) | Elegimos RAID 10 (espejo) para tener más redundancia: si falla un disco, tenemos su copia en el espejo. Como el servidor tiene bastante espacio en disco, nos pareció viable perder la mitad de la capacidad. | Configuración RAID en la BIOS/controladora |
-| 15/10/2026 | Instalación completa de Proxmox y primeras pruebas | Con el RAID bien configurado el 13/10, la instalación terminó sin errores | Resumen del nodo proxmoxAB (pendiente) |
-| 20/10/2026 | Creación de VMs Linux: WEB01, WEB02, DB01, DB02 | — | — (esas VMs se recrearon el 05/11; el estado actual está en la fila del 12/11) |
-| 22/10/2026 | Creación de VMs Windows: DC01, DC02, DHCP, DHCP02, FILES01, FILES02, BACKUP | Discos de 0 GB en DHCP y FILES02 | Hardware de DHCP mostrando el disco |
-| 27/10/2026 | Sin avance (miembros enfermos) | Sesión perdida | — |
-| 29/10/2026 | Instalación de Ansible | Ansible core 2.16.3 instalado. La VM no traía configuración de red: se creó /etc/netplan/01-netcfg.yaml a mano | `ansible --version` en la VM Ansible (pendiente) |
-| 03/11/2026 | Configuración de Ansible (inventario, playbooks, plantilla) | config file = None hasta crear ansible.cfg e inventario.ini; Git no guarda carpetas vacías (se añadió .gitkeep); rama renombrada a main | Salida actual (con --ask-vault-pass) de `ansible all -m ping` |
-| 05/11/2026 | Instalación y configuración de Checkmk | VLAN 40/100 con NAT en Proxmox; DNS del centro sin respuesta (P5); plantilla 9000 y recreación de las 5 VMs Linux; playbook cortado al pegar (P6); usuario automation inexistente, error 401 (P7) | Panel de Checkmk con los hosts |
-| 10/11/2026 | Organización de la documentación: explicación del plan semanal (14.1), reparto de tareas (14.2) y guías de defensa individuales. Decisión: Windows Server 2025 para las VMs Windows. Diagnóstico de las VMs Windows con qm config, sin aplicar cambios: DHCP y FILES02 sí tienen disco pero sin scsi0 en el orden de arranque; ninguna Windows tiene tag=40; la ISO montada es la de idiomas y características (LOF), no el instalador. Correcciones pasadas al jueves 12/11 | Nos comunican que la documentación se entregará y actualizará cada semana a partir de la próxima | qm config de las 7 Windows antes del cambio (hecha el 12/11) ![qm config de las VMs Windows antes del cambio](img/fase1/12-11/12-p2-qm-config-antes.png) |
-| 12/11/2026 | Acceso root por clave de Ansible a Proxmox y grupo \[proxmox\] en el inventario. Descarga de WS2025\_eval.iso (es-ES) y virtio-win.iso 0.1.302. Playbook proxmox-vms-windows.yml (Guti): comprueba las ISO de WS2025 y virtio-win, guarda la configuración antigua en /root/qm-antes, borra las 7 VMs Windows vacías y las recrea con VirtIO, VLAN 40, disco en el arranque y los dos CD; la segunda ejecución no cambia nada. Commit feat(proxmox) 06aff21 en local; se conectó el repositorio a GitHub, pero el push no se completó. Descarga de ISOs e instalación de Windows: Guti; diseño del Anexo I, documentación e instrucciones del playbook: Berta. Inicio de la instalación de Windows Server 2025 con el driver vioscsi. Decisiones: dominio cibernova.local, IPs de los DC y Experiencia de escritorio. Diseño del Anexo I (Berta) | Resuelto P2; nuevos P10 (clave root) y P11 (error YAML). Las VMs Windows tenían la ISO de idiomas (LOF), sin etiqueta VLAN y con tarjetas e1000 | qm list antes y después; qm config antes; Hardware de DC01; ISOs; segunda ejecución del playbook; instalador con vioscsi ![qm list después: 102 con 40 GB y 109 con 60 GB](img/fase1/12-11/12-p2-qm-list-despues.png) ![Hardware de DC01 con tag=40 y los dos CD](img/fase1/12-11/06-dc01-hardware-vlan40.png) ![Segunda ejecución del playbook: todo en skipping](img/fase1/12-11/09-proxmox-playbook-idempotencia.png) |
-| 16/11/2026 (lunes, sin clase) | Guti: 10 playbooks de Ansible para AD, DNS y DHCP (pasan --syntax-check y ansible-lint con perfil production en Ansible core 2.16.3), con comprobación previa, snapshots pre-ad y any\_errors\_fatal. DC01 preparado: drivers VirtIO (virtio-win-guest-tools.exe), IP fija 192.168.40.10/24 con SConfig y WinRM comprobado con Test-WSMan. Con Ansible: win-00 y win-01 con --limit cn-dc01 y ad-01-dc01-bosque.yml: bosque cibernova.local (NetBIOS CIBERNOVA), nivel Windows2025Domain, DC01 con los roles FSMO y DNS con reenviadores, zonas inversas 40, 50 y 100 y registros A/PTR de las Linux. ad-99-verificar.yml --limit cn-dc01 con failed=0. Apagado ordenado de las 13 VMs con qm shutdown. Berta: diagrama de red en el README y decisiones sobre el lenguaje de los scripts y el alta de usuarios | Nuevos P12 a P16. dcdiag con dos avisos (P14 y P15), pendientes de revisar el 17/11. Los playbooks nuevos aún no están en GitHub | 23 capturas de Guti (preparación de DC01, dominio y cierre), pendientes de subir a docs/img/fase1 |
+| # | Fecha | Trabajo realizado | Problemas / observaciones | Captura |
+| --- | --- | --- | --- | --- |
+| B1 | 17/09/2026 | Brainstorming: qué queremos hacer y cómo enfocarlo | — | — (no se conserva) |
+| B2 | 22/09/2026 | Diseño y planificación inicial | — | Calendario original ([sección 2](#2-calendario-original)) |
+| B3 | 24/09/2026 | Sin clase (festivo) | Sesión perdida | — |
+| B4 | 29/09/2026 | Clases canceladas por lluvia | Sesión perdida | — |
+| B5 | 06/10/2026 | Preparación del servidor  e intento de instalación de Proxmox | Errores en la instalación, máquina muy lenta | — (no se conserva; síntoma descrito en P1) |
+| B6 | 08/10/2026 | Intento de solucionar la instalación | Reinicios muy lentos; se cedió la pantalla a otro grupo | — |
+| B7 | 13/10/2026 | Configuración del RAID 10 (espejo + bandas) | Elegimos RAID 10 (espejo) para tener más redundancia: si falla un disco, tenemos su copia en el espejo. Como el servidor tiene bastante espacio en disco, nos pareció viable perder la mitad de la capacidad. | Configuración RAID en la BIOS/controladora |
+| B8 | 15/10/2026 | Instalación completa de Proxmox y primeras pruebas | Con el RAID bien configurado el 13/10, la instalación terminó sin errores | Resumen del nodo proxmoxAB (pendiente) |
+| B9 | 20/10/2026 | Creación de VMs Linux: WEB01, WEB02, DB01, DB02 | — | — (esas VMs se recrearon el 05/11; el estado actual está en la fila del 12/11) |
+| B10 | 22/10/2026 | Creación de VMs Windows: DC01, DC02, DHCP, DHCP02, FILES01, FILES02, BACKUP | Discos de 0 GB en DHCP y FILES02 | Hardware de DHCP mostrando el disco |
+| B11 | 27/10/2026 | Sin avance (miembros enfermos) | Sesión perdida | — |
+| B12 | 29/10/2026 | Instalación de Ansible | Ansible core 2.16.3 instalado. La VM no traía configuración de red: se creó /etc/netplan/01-netcfg.yaml a mano | `ansible --version` en la VM Ansible (pendiente) |
+| B13 | 03/11/2026 | Configuración de Ansible (inventario, playbooks, plantilla) | config file = None hasta crear ansible.cfg e inventario.ini; Git no guarda carpetas vacías (se añadió .gitkeep); rama renombrada a main | Salida actual (con --ask-vault-pass) de `ansible all -m ping` |
+| B14 | 05/11/2026 | Instalación y configuración de Checkmk | VLAN 40/100 con NAT en Proxmox; DNS del centro sin respuesta (P5); plantilla 9000 y recreación de las 5 VMs Linux; playbook cortado al pegar (P6); usuario automation inexistente, error 401 (P7) | Panel de Checkmk con los hosts |
+| B15 | 10/11/2026 | 1. Organizamos la documentación: explicamos el plan semanal (14.1), repartimos las tareas (14.2) y preparamos las guías de defensa individuales.<br>2. Decidimos usar Windows Server 2025 en las VMs Windows.<br>3. Revisamos las VMs Windows con `qm config`, sin cambiar nada, y encontramos tres fallos:<br>  • DHCP y FILES02 tienen disco, pero no está en el orden de arranque.<br>  • Ninguna Windows tiene la etiqueta de la VLAN 40 (`tag=40`).<br>  • La ISO montada es la de idiomas y características (LOF), no la del instalador.<br>4. Dejamos las correcciones para el jueves 12/11. | Nos comunican que la documentación se entregará y actualizará cada semana a partir de la próxima | qm config de las 7 Windows antes del cambio (hecha el 12/11) ![qm config de las VMs Windows antes del cambio](img/fase1/12-11/12-p2-qm-config-antes.png) |
+| B16 | 12/11/2026 | 1. Dimos a Ansible acceso por clave como root a Proxmox y añadimos el grupo `[proxmox]` al inventario.<br>2. Descargamos las ISO `WS2025_eval.iso` (es-ES) y `virtio-win.iso` 0.1.302.<br>3. Guti creó el playbook `proxmox-vms-windows.yml`, que:<br>  • comprueba que están las ISO de WS2025 y virtio-win;<br>  • guarda la configuración antigua en `/root/qm-antes`;<br>  • borra las 7 VMs Windows vacías y las vuelve a crear con VirtIO, VLAN 40, el disco en el arranque y los dos CD.<br>4. Lo ejecutamos dos veces: la segunda no cambió nada, así que es idempotente.<br>5. Hicimos el commit `feat(proxmox)` 06aff21 en local. Conectamos el repositorio a GitHub, pero el push no se completó.<br>6. Empezamos a instalar Windows Server 2025 cargando el driver vioscsi.<br>7. Decidimos el dominio `cibernova.local`, las IP de los DC y la edición con Experiencia de escritorio.<br>8. Reparto: Guti descargó las ISO e instaló Windows; Berta diseñó el Anexo I, documentó y escribió las instrucciones del playbook. | 1. Resolvimos P2: DHCP y FILES02 ya arrancan con su disco.<br>2. Apareció P10: Ansible no podía entrar como root en Proxmox porque su clave no estaba autorizada.<br>3. Apareció P11: el playbook no arrancaba por un error de sintaxis YAML (faltaban comillas en un `when:`).<br>4. Al revisar las VMs Windows vimos que tenían montada la ISO de idiomas (LOF), no llevaban la etiqueta de la VLAN y usaban tarjetas de red e1000. | Ese día hicimos capturas de: el qm list antes y después del cambio, el qm config antes del cambio, el hardware de DC01, la lista de ISOs, la segunda ejecución del playbook y el instalador cargando vioscsi. Aquí van tres de ellas: ![qm list después: 102 con 40 GB y 109 con 60 GB](img/fase1/12-11/12-p2-qm-list-despues.png) ![Hardware de DC01 con tag=40 y los dos CD](img/fase1/12-11/06-dc01-hardware-vlan40.png) ![Segunda ejecución del playbook: todo en skipping](img/fase1/12-11/09-proxmox-playbook-idempotencia.png) |
+| B17 | 16/11/2026 (lunes, sin clase) | 1. Guti preparó 10 playbooks de Ansible para AD, DNS y DHCP. Todos pasan `--syntax-check` y `ansible-lint` (perfil production) y llevan comprobación previa, snapshots pre-ad y `any_errors_fatal`.<br>2. Guti preparó DC01: instaló los drivers VirtIO (`virtio-win-guest-tools.exe`), puso la IP fija 192.168.40.10/24 con SConfig y comprobó WinRM con `Test-WSMan`.<br>3. Con Ansible lanzó `win-00`, `win-01` y `ad-01-dc01-bosque.yml` solo en DC01 (`--limit cn-dc01`). Así se creó el bosque `cibernova.local` (NetBIOS CIBERNOVA): nivel Windows2025Domain, DC01 con los roles FSMO, DNS con reenviadores, zonas inversas 40, 50 y 100 y registros A/PTR de las Linux.<br>4. Comprobó el dominio con `ad-99-verificar.yml`: `failed=0`.<br>5. Apagó las 13 VMs de forma ordenada con `qm shutdown`.<br>6. Berta documentó, añadió el diagrama de red al README y decidimos el lenguaje de los scripts y cómo dar de alta a los usuarios. | 1. P12: DC01 no tenía tarjeta de red hasta que instalamos los drivers VirtIO.<br>2. P13: en la consola noVNC el teclado cambiaba algunos símbolos.<br>3. P14 y P15: `dcdiag` dio dos avisos (SYSVOL y SID duplicado). Quedan pendientes de revisar el 17/11.<br>4. P16: la VM Ansible no respondió al agente QEMU al apagarla.<br>5. Los playbooks nuevos todavía no están en GitHub. | Guti hizo 23 capturas: la preparación de DC01, la creación del dominio y el apagado final. Las subimos el 17/11 a `docs/img/fase1/16-11` y las más importantes están en el apartado 11.2. |
+
+**Cronograma: plan original frente a lo realizado.** Arriba, los 5 hitos del calendario original; abajo, lo que hicimos de verdad según la bitácora; en azul el plan original, en verde lo realizado y en rojo las sesiones perdidas.
+
+*Cómo leer los ID que van detrás de cada barra:* **C** = hito del calendario original ([sección 2](#2-calendario-original)) y **B** = sesión de la bitácora ([sección 3](#3-diario-de-trabajo-bitácora)). Por ejemplo, B5-B8 son las sesiones del 06/10 al 15/10.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'taskBkgColor': '#4c78a8', 'taskBorderColor': '#2f5d8a', 'taskTextLightColor': '#ffffff', 'taskTextColor': '#ffffff', 'taskTextOutsideColor': '#333333', 'doneTaskBkgColor': '#54a24b', 'doneTaskBorderColor': '#3b7a34', 'taskTextDarkColor': '#ffffff', 'critBkgColor': '#e45756', 'critBorderColor': '#b23b3a', 'sectionBkgColor': '#dbe9f7', 'altSectionBkgColor': '#dcf0d8', 'sectionBkgColor2': '#f9dcdc', 'titleColor': '#1f2937'}}}%%
+gantt
+    title Fase 1: plan original frente a lo realizado
+    dateFormat YYYY-MM-DD
+    axisFormat %d/%m
+    section Plan original
+    1. Análisis y diseño (C1)⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      :p1, 2026-09-22, 2026-10-01
+    2. Hipervisor (C2)⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀              :p2, 2026-10-06, 2026-10-15
+    3. Servicios core (C3)⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀          :p3, 2026-10-20, 2026-10-29
+    4. Redundancia y HA (C4)        :p4, 2026-11-03, 2026-11-12
+    5. Documentación y demo (C5)    :p5, 2026-11-17, 2026-11-26
+    section Realizado
+    Diseño y planificación (B2)     :done, r1, 2026-09-22, 2026-10-01
+    RAID 10 e instalación de Proxmox (B5-B8) :done, r2, 2026-10-06, 2026-10-15
+    VMs Linux y Windows creadas (B9, B10) :done, r3, 2026-10-20, 2026-10-22
+    Ansible (B12, B13)⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀               :done, r4, 2026-10-29, 2026-11-03
+    VLAN, NAT y Checkmk (B14)        :done, r5, 2026-11-05, 1d
+    Diagnóstico y recreación de las VMs Windows (B15, B16) :done, r6, 2026-11-10, 2026-11-12
+    DC01 y bosque cibernova.local (B17) :done, r7, 2026-11-16, 1d
+    section Sesiones perdidas
+    Festivo (B3)                    :crit, milestone, 2026-09-24, 0d
+    Lluvia (B4)                     :crit, milestone, 2026-09-29, 0d
+    Enfermedad (B11)                 :crit, milestone, 2026-10-27, 0d
+```
 
 ## 4. Desfases respecto al calendario
 
@@ -61,13 +130,40 @@ Para cada desfase anotamos qué habíamos planificado, qué pasó, por qué, qu�
 | # | Planificado | Qué ocurrió | Causa | Medida / replanificación | Impacto |
 | --- | --- | --- | --- | --- | --- |
 | D1 | Hito 1, análisis y diseño (22/09 a 01/10) | No hubo clase el 24/09 ni el 29/09 | Festivo y cancelación de las clases por lluvia | El calendario tenía margen, así que se terminó el diseño en las sesiones que quedaban sin cambiar el plan | Menos tiempo de diseño; el hipervisor empezó el 06/10, como estaba previsto |
-| D2 | Hito 2, hipervisor: RAID, instalación de Proxmox y red (06/10 a 15/10) | La instalación falló el 06/10 y el 08/10; el 13/10 se configuró el RAID y el 15/10 se terminó la instalación | 1) No sabíamos entrar en la BIOS: no encontrábamos la tecla correcta y cada reinicio tardaba de 10 a 15 minutos. 2) La pantalla a la que entrábamos no era la BIOS; buscamos cómo hacerlo y cedimos la pantalla a otro grupo para ver si ellos lo sabían. 3) La instalación se reiniciaba sola por una mala configuración del RAID | Configurar el RAID en la controladora antes de reinstalar (13/10) y reinstalar (15/10). Para recuperar tiempo, buscamos agilizar la configuración de las máquinas: plantilla cloud-init y Ansible (D6) | Proxmox listo el 15/10, en la fecha prevista, pero sin la red del hito: las VLAN se configuraron el 05/11 |
+| D2 | Hito 2, hipervisor: RAID, instalación de Proxmox y red (06/10 a 15/10) | La instalación falló el 06/10 y el 08/10; el 13/10 se configuró el RAID y el 15/10 se terminó la instalación | 1) No sabíamos entrar en la BIOS: no encontrábamos la tecla correcta y cada reinicio tardaba de 10 a 15 minutos.&#32; 2) La pantalla a la que entrábamos no era la BIOS; buscamos cómo hacerlo y cedimos la pantalla a otro grupo para ver si ellos lo sabían.&#32; 3) La instalación se reiniciaba sola por una mala configuración del RAID | Configurar el RAID en la controladora antes de reinstalar (13/10) y reinstalar (15/10). Para recuperar tiempo, buscamos agilizar la configuración de las máquinas: plantilla cloud-init y Ansible (D6) | Proxmox listo el 15/10, en la fecha prevista, pero sin la red del hito: las VLAN se configuraron el 05/11 |
 | D3 | Hito 3: instalación de Ansible el 27/10 | Sin avance el 27/10 | Enfermedad de los dos miembros | Ansible se instaló el 29/10 y se priorizó la automatización (Ansible y Checkmk) para ganar tiempo en el resto de servicios | Una sesión perdida; los servicios core no se empezaron en el hito 3 (D4) |
-| D4 | Hito 3: servicios Windows (AD, DHCP, ficheros) instalados entre el 20/10 y el 29/10 | VMs Windows creadas pero sin instalar a 05/11 | Se priorizaron Ansible y Checkmk | Nuevo plan semanal (sección 14): Windows y Anexo I de la semana 1 a la 4, con el reparto de 14.1 y 14.2 | Retrasa AD, DHCP, ficheros y permisos del Anexo I |
+| D4 | Hito 3: servicios Windows (AD, DHCP, ficheros) instalados entre el 20/10 y el 29/10 | VMs Windows creadas pero sin instalar a 05/11 | Se priorizaron Ansible y Checkmk | Nuevo plan semanal ([sección 14](#14-plan-para-lo-que-queda-de-trimestre)): Windows y Anexo I de la semana 1 a la 4, con el reparto de 14.1 y 14.2 | Retrasa AD, DHCP, ficheros y permisos del Anexo I |
 | D5 | Monitorización no prevista en la Fase 1 | Se añadió Checkmk (VM 112) con agente y alta automática por Ansible el 05/11 | Cambio de alcance: la Fase 2 exige monitorización con alertas sobre datos reales | Se adelanta como base para la Fase 2 | Una sesión más dedicada a Linux; a cambio, las Windows quedarán monitorizadas al instalarlas |
 | D6 | VMs Linux instaladas con ISO (creadas el 20/10) | Se borraron vacías y se recrearon desde la plantilla 9000 con el mismo ID el 05/11 | Instalar cada una con ISO costaba de 20 a 30 minutos por VM y daba IPs repetidas al clonar | Plantilla cloud-init y clones completos con su VLAN e IP | Positivo: las 5 VMs listas para Ansible en una sesión |
-| D7 | Semana 1 del nuevo plan (10/11 y 12/11): DC01 y DC02 instalados y dominio promovido, con dcdiag sin errores | El 10/11 solo hubo diagnóstico; el 12/11 se recrearon las VMs Windows con Ansible y empezó la instalación | Las correcciones de las VMs Windows (P2, VLAN, ISO) se detectaron el 10/11 | Recreación automatizada con Ansible el 12/11; la promoción del dominio y dcdiag pasan al 17/11; el formateo de discos de WEB y DB (P4) pasa a la semana 5 | Retraso de 1 sesión respecto al plan de la sección 14 |
+| D7 | Semana 1 del nuevo plan (10/11 y 12/11): DC01 y DC02 instalados y dominio promovido, con dcdiag sin errores | El 10/11 solo hubo diagnóstico; el 12/11 se recrearon las VMs Windows con Ansible y empezó la instalación | Las correcciones de las VMs Windows (P2, VLAN, ISO) se detectaron el 10/11 | Recreación automatizada con Ansible el 12/11; la promoción del dominio y dcdiag pasan al 17/11; el formateo de discos de WEB y DB (P4) pasa a la semana 5 | Retraso de 1 sesión respecto al plan de la [sección 14](#14-plan-para-lo-que-queda-de-trimestre) |
 | D8 | Promoción del dominio en DC01 y DC02 y dcdiag el 17/11 (medida de D7) | El 16/11 (lunes, sin clase) Guti creó el bosque en DC01 con Ansible; DC02 y los servidores miembro siguen pendientes | Trabajo fuera del horario de clase para recuperar el retraso de D7 | El 17/11 se preparan las 6 Windows restantes y se lanza cibernova-dominio.yml (DC02, OUs, unión al dominio y DHCP con failover) | Positivo: recupera parte del retraso de D7. Riesgo: si la preparación de las 6 Windows se alarga, DC02 y DHCP pasan al 19/11 |
+
+**Ruta crítica hasta el 15/12.** Es la cadena de tareas que depende una de otra (sin dominio no hay usuarios, sin usuarios no hay permisos y sin permisos no hay pruebas): cualquier retraso en ella retrasa el final. Las tareas "con holgura" pueden moverse sin afectar a la fecha final. Por eso los desfases D7 y D8, que retrasan el dominio, son los que más importan.
+
+*Cómo leer los ID que van detrás de cada barra:*&#32;
+
+- **S** = semana del plan semanal del apartado [sección 14](#14-plan-para-lo-que-queda-de-trimestre) (S1 es la semana del 10/11 y S6 la del 15/12) .
+- &#32;**B** = sesión de la bitácora ya realizada ([sección 3](#3-diario-de-trabajo-bitácora)).&#32;
+- Los desfases de la tabla de arriba usan **D**.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'taskBkgColor': '#4c78a8', 'taskBorderColor': '#2f5d8a', 'taskTextLightColor': '#ffffff', 'taskTextColor': '#ffffff', 'taskTextOutsideColor': '#333333', 'doneTaskBkgColor': '#54a24b', 'doneTaskBorderColor': '#3b7a34', 'taskTextDarkColor': '#ffffff', 'critBkgColor': '#e45756', 'critBorderColor': '#b23b3a', 'sectionBkgColor': '#f9dcdc', 'altSectionBkgColor': '#dbe9f7', 'sectionBkgColor2': '#f9dcdc', 'titleColor': '#1f2937'}}}%%
+gantt
+    title Ruta crítica de la Fase 1 (plan de la sección 14)
+    dateFormat YYYY-MM-DD
+    axisFormat %d/%m
+    section Ruta crítica
+    DC01 y bosque (hecho) (B17)            :done, crit, a1, 2026-11-16, 1d
+    DC02 y dcdiag (S1)                    :crit, a2, 2026-11-17, 2026-11-18
+    DHCP con failover y red de clientes (S2) :crit, a3, 2026-11-19, 2026-11-20
+    Usuarios del CSV y GPO (S3)⠀⠀⠀⠀⠀⠀           :crit, a4, 2026-11-24, 2026-11-27
+    DFS, permisos y pruebas 1 a 8 (S4)⠀⠀⠀⠀⠀⠀    :crit, a5, 2026-12-01, 2026-12-04
+    Pruebas 9 a 15 y memoria cerrada (S6) :crit, a6, 2026-12-15, 1d
+    Margen y ensayo de la defensa (S6)    :milestone, a7, 2026-12-17, 0d
+    section Con holgura
+    DNS de las Linux y discos de WEB y DB (S2) :b1, 2026-11-19, 2026-11-20
+    Web, MariaDB y backups (S5)⠀⠀⠀⠀⠀⠀           :b2, 2026-12-08, 2026-12-11
+```
 
 ### Detalle de D2: preparación del servidor e instalación de Proxmox
 
@@ -81,7 +177,7 @@ Para recuperar tiempo buscamos agilizar la configuración de las máquinas y añ
 
 ### Detalle de D7: Ansible sobre las VMs Windows
 
-Ansible no instala el sistema operativo: configura máquinas que ya existen. El 12/11 lo usamos desde la VM Ansible contra Proxmox para recrear las 7 VMs Windows con el playbook proxmox-vms-windows.yml (sección 9.5): les montamos la ISO correcta de Windows Server 2025 (antes tenían la de idiomas y características, LOF), los drivers VirtIO y la VLAN 40. La instalación de Windows se hace después, a mano desde la consola (sección 11.1).
+Ansible no instala el sistema operativo: configura máquinas que ya existen. El 12/11 lo usamos desde la VM Ansible contra Proxmox para recrear las 7 VMs Windows con el playbook proxmox-vms-windows.yml ([sección 9.5](#95-detalle-del-playbook-proxmox-vms-windowsyml)): les montamos la ISO correcta de Windows Server 2025 (antes tenían la de idiomas y características, LOF), los drivers VirtIO y la VLAN 40. La instalación de Windows se hace después, a mano desde la consola ([sección 11.1](#111-instalación-de-windows-server-2025-en-curso)).
 
 Una vez instalado el sistema operativo, Ansible se puede usar durante toda la vida del servidor para configurar redes, instalar aplicaciones, actualizar sistemas o modificar parámetros (en Windows, por WinRM).
 
@@ -98,40 +194,46 @@ Impacto: una sesión de retraso ahora. A cambio, las pruebas de redundancia de l
 
 ## 5. Diseño: decisiones tecnológicas
 
-Para cada decisión anotamos lo que elegimos, las alternativas que valoramos y por qué.
+| Capa | Decisión | Elegido | Descartado | Por qué | Riesgo y mejora |
+| --- | --- | --- | --- | --- | --- |
+| Hardware | Almacenamiento | RAID 10 en la controladora (4 × 900 GB) | ZFS, RAID 1, RAID 5 | Aguanta la caída de un disco por espejo y rinde bien con muchas VMs | Se pierde la mitad de la capacidad (\~1,8 TB útiles); el RAID no sustituye a los backups |
+| Virtualización | Hipervisor | Proxmox VE 9.2.2 | XCP-ng, VMware ESXi | Libre, interfaz web, VLAN y LVM-thin nativos, plantillas y cloud-init | — |
+| Virtualización | Despliegue Linux | Plantilla cloud-init 9000 | Instalar cada VM con ISO | Clonado en minutos y configuración idéntica | — |
+| Virtualización | Corrección de las VMs Windows | Borrarlas y recrearlas con el playbook (etiqueta ws2025) | Modificar cada VM con qm set | Estaban vacías; quedan las 7 iguales y el playbook es idempotente | — |
+| Red | Router entre VLAN y NAT | Proxmox (vmbr1.40, vmbr1.100, ip\_forward y MASQUERADE) | OPNsense, pfSense | No hay firewall físico y es lo más rápido de montar | Punto único de fallo; en producción, firewall dedicado en HA |
+| Red | Acceso de administración | SSH con ProxyJump por Proxmox y túneles SSH | Rutas estáticas, VPN Tailscale, redirección de puertos | No requiere administrador en el PC ni abre puertos | — |
+| Red | IP de los DC | Fija: DC01 .10 y DC02 .11 | IP por DHCP con reserva | Son el DNS del dominio y el DHCP depende de ellos | — |
+| Red | IP del resto de Windows | Bloques por función: .12/.13, .30/.31, .50 | IPs consecutivas .12 a .16 | La IP indica la función y deja sitio para crecer | — |
+| Sistemas operativos | Ecosistema | Mixto: Windows + Linux | Solo Linux con Samba AD | GPO, perfiles, ABE y DFS nativos en Windows; Linux donde es más ligero | — |
+| Sistemas operativos | SO Linux | Ubuntu Server 24.04 LTS | Debian 12 | LTS, imagen cloud oficial y paquete oficial de Checkmk | — |
+| Sistemas operativos | SO Windows | Windows Server 2025 (evaluación) | Windows Server 2022 | Soporte estándar hasta 2029 y extendido hasta 2034 | Evaluación de 180 días: caduca hacia el 11/05/2027; ampliable con slmgr /rearm (por comprobar) |
+| Sistemas operativos | Edición | Experiencia de escritorio | Server Core | Consolas gráficas para demostrar los conceptos y hacer capturas | Más superficie de ataque y consumo; Server Core en la Fase 3 |
+| Dominio y servicios | Nombre del dominio | cibernova.local (NetBIOS CIBERNOVA) | cibernova.internal, ad.cibernova.es | Nombre clásico y fácil de reconocer | .local también lo usa mDNS y puede fallar en clientes Linux (P3) |
+| Dominio y servicios | Estructura de OUs | OU=CiberNova y OU Servidores; equipos nuevos a Equipos\\Puestos | Contenedor Computers por defecto | Permite aplicar GPO solo a servidores o solo a puestos | — |
+| Dominio y servicios | Failover DHCP | Equilibrio de carga 50/50, MCLT de 1 h (propuesto, sin aplicar) | Espera activa; ámbito dividido 80/20 | Los dos servidores reparten IPs y comparten las concesiones | — |
+| Dominio y servicios | Reenviadores DNS | 8.8.8.8 y 1.1.1.1 | DNS del centro; sugerencias de raíz | El DNS del centro no responde desde el laboratorio (P5) | Las consultas externas salen a servidores públicos; en producción, DNS corporativo |
+| Automatización | Herramienta | Ansible 2.16 | Scripts Bash sueltos | Idempotencia y playbooks versionados en Git | — |
+| Automatización | Configuración de las VMs en Proxmox | Ansible contra proxmoxAB por SSH como root | Bucle de bash; API de Proxmox con token | Automatiza también el hipervisor y queda versionado | Quien controle la VM Ansible controla Proxmox; en la Fase 3, token con permisos mínimos |
+| Automatización | Lenguajes | PowerShell (túneles) + Ansible (despliegue) | Solo PowerShell; solo Ansible | PowerShell no necesita administrador; Ansible centraliza y es idempotente | La VM Ansible y Proxmox son puntos únicos de acceso; se reconstruyen desde GitHub |
+| Automatización | Conexión con Windows | WinRM por HTTP (5985) con NTLM y become runas | HTTPS con certificado; Kerberos; OpenSSH | Funciona solo con Enable-PSRemoting; runas evita el doble salto | No verifica la identidad del servidor; HTTPS en la Fase 3 |
+| Automatización | Alta de usuarios del Anexo I | Script PowerShell (scripts/alta-usuarios.ps1) lanzado por Ansible en DC01 | microsoft.ad.user; script a mano | Cmdlets nativos, se prueba por separado y se lanza siempre igual desde Git | — |
+| Secretos y cuentas | Gestión de secretos | Ansible Vault (AES256) | Variables en texto plano | Ningún secreto en claro en Git | — |
+| Secretos y cuentas | Contraseña del vault | En /dev/shm durante la sesión | --ask-vault-pass; fichero en disco | No se escribe en cada playbook ni queda en disco | Legible mientras dura la sesión; permisos 600 y borrarla al cerrar |
+| Secretos y cuentas | Cuenta para la API de Checkmk | Cuenta de servicio automation | Usar cmkadmin | Separa los cambios automáticos de los humanos | Pendiente: rol con menos permisos que Administrator |
+| Monitorización | Monitorización | Checkmk 2.5 Community | Zabbix; Prometheus + Grafana | Gratis, descubrimiento automático y alta de hosts por API con Ansible | — |
+| Documentación | Versión oficial | Documento en línea exportado cada jueves a Markdown en Git | memoria-fase1.md como versión oficial | Se actualiza directamente al cerrar cada sesión | Lo que se edite a mano en el .md se pierde en la siguiente exportación |
 
-| Decisión | Elegido | Alternativas valoradas | Justificación |
-| --- | --- | --- | --- |
-| Hipervisor | Proxmox VE 9.2.2 | XCP-ng, VMware ESXi | Libre y sin licencia, como prioriza el enunciado; interfaz web; soporte nativo de VLAN, LVM-thin y ZFS; plantillas y cloud-init para clonar VMs |
-| Ecosistema | Mixto: Windows (identidades, DHCP, ficheros) + Linux (web, BBDD, gestión) | Solo Linux con Samba AD | El Anexo I pide GPO, perfiles móviles y obligatorios, ABE y DFS, que Windows Server trae de forma nativa; Linux donde es más ligero |
-| SO Linux | Ubuntu Server 24.04 LTS | Debian 12 | Versión LTS; imagen cloud oficial con cloud-init para la plantilla; paquete oficial de Checkmk para 24.04 |
-| SO Windows | Windows Server 2025 (evaluación), decidido el 10/11 | Windows Server 2022 (no la comparamos al decidir; la revisamos el 13/11) | Versión más reciente, con el ciclo de soporte más largo: soporte estándar hasta el 14/11/2029 y extendido hasta el 15/11/2034. Windows Server 2022 terminó su soporte estándar el 14/10/2026 y el extendido acaba el 15/10/2031 (fuente: ciclo de vida de Microsoft Learn). Evaluación de 180 días según Microsoft. Si se instala el 12/11/2026, caduca hacia el 11/05/2027 (a confirmar con slmgr /dlv). Riesgo aceptado: puede caducar antes del final de la Fase 3; ampliable con slmgr /rearm (pendiente de comprobar). |
-| Almacenamiento | RAID 10 (espejo + bandas) en la controladora sobre los 4 discos de 900 GB | ZFS, RAID 1, RAID 5 | Nuestro motivo (13/10): más redundancia y una copia de la que respaldarse si falla un disco. RAID 10 forma dos espejos y reparte los datos en bandas entre ellos: aguanta la caída de un disco de cada espejo y da buen rendimiento con muchas VMs. Coste: se pierde la mitad de la capacidad (unos 1,8 TB útiles de 3,6 TB; el pool pve/data tiene 1,49 TiB). El RAID no sustituye a los backups. Descartados: RAID 1 solo aprovecha dos de los cuatro discos; RAID 5 escribe más lento y, mientras se reconstruye un disco, otro fallo hace perder todo el volumen; ZFS en Proxmox necesita los discos sin RAID de controladora. |
-| Automatización | Ansible 2.16 | Scripts Bash sueltos | Idempotencia y playbooks versionados en Git |
-| Monitorización | Checkmk 2.5 Community | Zabbix, Prometheus + Grafana | Edición gratuita, descubrimiento automático de servicios, compatible con Ubuntu 24.04 y colección oficial de Ansible (checkmk.general) para dar de alta hosts por API |
-| Despliegue Linux | Plantilla cloud-init (ID 9000) | Instalar cada VM con ISO | Clonado en minutos y configuración idéntica |
-| Router entre VLANs y NAT | Proxmox (vmbr1.40, vmbr1.100, ip\_forward e iptables MASQUERADE) | Firewall virtual OPNsense o pfSense | No hay firewall físico y es lo más rápido de montar. Es un punto único de fallo reconocido; en producción, firewall dedicado en HA |
-| Acceso remoto de administración | SSH con ProxyJump por Proxmox y túneles SSH | Rutas estáticas en el PC; VPN Tailscale; redirección de puertos | No requiere administrador en el PC ni abre puertos; la red de servidores solo es accesible por un bastión. La VPN quedó descartada sin permiso del profesorado |
-| Gestión de secretos | Ansible Vault (AES256) en group\_vars/all/vault.yml | Variables en texto plano; leer el secreto del servidor en cada ejecución | Ningún secreto en claro en Git, como exige el proyecto |
-| Cuenta para la API de Checkmk | Cuenta de servicio automation | Usar cmkadmin | Separa los cambios automáticos de los humanos (trazabilidad). Mejora pendiente: rol con menos permisos que Administrator |
-| Configuración de las VMs en Proxmox (ISO, VLAN, arranque, drivers) | Ansible desde la VM Ansible contra proxmoxAB por SSH como root (decidido el 10/11; acceso root por clave configurado el 12/11, P10) | Bucle de bash en la consola de Proxmox; API de Proxmox con token y el módulo community.general.proxmox\_kvm | Demuestra la automatización con Ansible también sobre el hipervisor y deja la configuración versionada y repetible. Riesgo aceptado: quien controle la VM Ansible controla Proxmox; en la Fase 3, sustituir por un token de API con permisos mínimos |
-| Corrección de las VMs Windows | Borrarlas y recrearlas con el playbook, marcadas con la etiqueta de Proxmox ws2025 (12/11) | Modificar cada VM en su sitio con qm set (VLAN, arranque, ISO) conservando discos y MAC | No tenían sistema instalado, así que no se perdía nada. Quedan las 7 iguales (VirtIO en disco y red, VLAN 40, disco en el arranque, dos CD) y desaparecen los unused0. La etiqueta ws2025 hace el playbook idempotente: solo borra las VMs que él no creó. Copia de la configuración antigua en /root/qm-antes |
-| Nombre del dominio | cibernova.local (NetBIOS CIBERNOVA), decidido el 12/11 | cibernova.internal (sufijo reservado para redes privadas); ad.cibernova.es (subdominio de un dominio registrado, lo que recomienda Microsoft) | Nombre clásico y fácil de reconocer. Riesgo reconocido: .local también lo usa mDNS y puede dar problemas de resolución en clientes Linux; se comprobará al apuntar las Linux a los DC (P3). |
-| Direccionamiento de los DC | IP fija: DC01 192.168.40.10 y DC02 192.168.40.11, decidido el 12/11 | IP por DHCP con reserva | Los DC son el DNS del dominio y el DHCP depende de ellos: deben estar en una dirección que no cambie y no depender del servicio que ellos mismos sostienen. |
-| Direccionamiento del resto de servidores Windows | Bloques por función: DHCP01/DHCP02 .12/.13, FILES01/FILES02 .30/.31, BACKUP .50 (decidido el 13/11) | IPs consecutivas de la .12 a la .16 (propuesta de Guti) | La IP indica la función y cada bloque deja sitio para crecer (un FILES03 sería la .32). Sigue el esquema que ya usan CMK (.20) y DB01/DB02 (.40/.41) y facilitará reglas de firewall por rangos en la Fase 3. Ninguna de estas VMs tenía IP asignada, así que no hubo que deshacer nada |
-| Versión oficial de la documentación | La documentación final (documento de Claude), exportada cada jueves a Markdown (docs/fase1/memoria-fase1.md) y subida a Git (decidido el 13/11) | El fichero memoria-fase1.md de Git como versión oficial | Las tareas de cierre de cada sesión la actualizan directamente y no hay que copiar cambios a mano. La exportación semanal mantiene la documentación viva en Markdown en Git con su historial de commits. Riesgo: lo que se edite directamente en el .md se pierde en la siguiente exportación, así que solo se edita el documento |
-| Edición de Windows Server | Experiencia de escritorio, decidido el 12/11 | Server Core | Las consolas gráficas (Usuarios y equipos de AD, GPMC, DFS, DHCP) permiten demostrar los conceptos y hacer las capturas. Riesgo: más superficie de ataque y más consumo; Server Core queda como mejora para la Fase 3. |
-| Lenguaje de los scripts y automatización | PowerShell + Ansible, decidido el 16/11: PowerShell en el PC del aula para abrir los túneles SSH (salto por Proxmox) y conectarse a las máquinas; Ansible en la VM Ansible para desplegar con playbooks (Linux por SSH, Windows por WinRM) | Solo PowerShell, ejecutado en cada servidor Windows; solo Ansible, abriendo los túneles a mano | PowerShell ya está en el PC del aula y abre los túneles sin permisos de administrador. Ansible centraliza la configuración de Linux y Windows desde un punto, es idempotente y queda versionado en Git con los secretos en Vault. Inconveniente: dos lenguajes que mantener. Riesgo: la VM Ansible y Proxmox (salto SSH) son puntos únicos de acceso para administrar, no para los servicios; se mitiga con el repositorio en GitHub para reconstruir la VM. Mejora para la Fase 3: WinRM sobre HTTPS |
-| Alta de usuarios del Anexo I | Script PowerShell versionado en el repositorio (scripts/alta-usuarios.ps1) que lee usuarios\_cibernova.csv y se ejecuta en DC01 mediante un playbook de Ansible, decidido el 16/11 | Playbook con la colección microsoft.ad (módulo microsoft.ad.user); script PowerShell lanzado a mano en DC01 | Usa los cmdlets nativos del módulo ActiveDirectory y el script se puede probar por separado en DC01; Ansible lo lanza siempre igual y desde Git. La idempotencia la tiene que garantizar el propio script (comprobar si el usuario o grupo ya existe antes de crearlo) y el playbook solo debe marcar changed cuando el script cree o modifique algo. Requisito: ninguna contraseña inicial en claro en el CSV ni en Git |
-| Estructura de OUs | Árbol del borrador de Berta (12/11) bajo OU=CiberNova, más una OU Servidores para los servidores miembro; los equipos nuevos van a Equipos\\Puestos con redircmp. Decidido el 16/11 | Dejar los servidores y los equipos nuevos en el contenedor Computers por defecto | Al contenedor Computers no se le pueden vincular GPO; con OUs propias se aplican GPO solo a servidores o solo a puestos. Todas las OUs se crean protegidas contra borrado. Usuarios y grupos no los crean los playbooks, sino el script del CSV (Anexo I) |
-| Modo del failover DHCP | Equilibrio de carga 50/50 entre DHCP01 y DHCP02, MCLT de 1 h. Propuesto por Guti el 16/11 en dhcp-01-failover.yml, aún sin aplicar | Failover en modo espera activa (hot standby); ámbito dividido 80/20 sin failover | Los dos servidores reparten IPs a la vez y comparten el estado de las concesiones; si cae uno, el otro asume todo el rango al pasar el MCLT. No hay que partir el rango a mano. Requiere un secreto compartido, guardado en Vault |
-| Reenviadores DNS del dominio | 8.8.8.8 y 1.1.1.1 en DC01 (16/11) y DC02 | DNS del centro (192.168.200.254); sugerencias de raíz sin reenviadores | El DNS del centro no responde desde el laboratorio (P5). Riesgo: las consultas externas salen a servidores públicos; en producción se usaría el DNS corporativo o el del proveedor |
-| Conexión de Ansible con Windows | WinRM por HTTP (5985) con NTLM y mensaje cifrado, cuenta Administrador y become runas con la cuenta del dominio (16/11) | WinRM por HTTPS (5986) con certificado; Kerberos; OpenSSH en Windows | Funciona sin certificados ni configuración extra: solo Enable-PSRemoting. become runas evita el problema del doble salto de NTLM al autorizar el DHCP o crear el failover. Riesgo: sin certificado no se verifica la identidad del servidor. Mejora para la Fase 3: HTTPS con certificado de una CA interna |
-| Contraseña del vault durante las sesiones | Se puede guardar en /dev/shm (memoria RAM) durante la sesión y se borra al terminar (16/11) | Escribirla en cada ejecución con --ask-vault-pass; fichero en disco con vault\_password\_file | Evita escribirla en cada playbook y no queda en el disco. Riesgo: mientras dura la sesión la puede leer quien acceda a la VM Ansible con ese usuario o con root, y se pierde si se olvida borrarla antes de apagar. Mitigación: permisos 600 y borrarla al cerrar la sesión |
+**Mapa de decisiones por capa.** Las 26 decisiones de la tabla, ordenadas desde el hardware hasta la documentación. En verde, lo elegido; en naranja, las decisiones con un riesgo aceptado que mejoraremos en la Fase 3; debajo de cada una, las alternativas descartadas. El original editable está en draw.io (`decisiones-tecnicas-fase1.drawio`).
+
+![Mapa de las 26 decisiones técnicas de la Fase 1 por capa, con lo elegido y lo descartado](diagramas/decisiones-tecnicas-fase1.png)
 
 ## 6. Diseño de red: VLANs, IPs y diagrama
 
 Dividimos la red en VLAN 40 (servidores internos) y VLAN 100 (DMZ con los servidores web), con Proxmox como router y NAT hacia la red del aula. Pusimos la web en una DMZ separada para que, si alguien compromete WEB01, no tenga acceso directo a los DC ni a los ficheros. De momento el tráfico entre VLANs aún no se filtra (ver 16.3).
+
+**Diagrama de red de la Fase 1 (16/11/2026).** De izquierda a derecha: la red del aula, el servidor proxmoxAB con sus bridges y el NAT, y las dos VLAN con cada VM, su ID y su IP. El original está en `docs/diagramas/red-fase1.dot` del repositorio.
+
+![Diagrama de red de la Fase 1: red del aula, proxmoxAB con vmbr0, vmbr1 y NAT, VLAN 40 de servidores internos y VLAN 100 DMZ](diagramas/red-fase1.svg)
 
 ### 6.1 Redes
 
@@ -199,9 +301,13 @@ Hemos escrito esta guía para que cualquiera pueda reinstalar proxmoxAB siguiend
 3. **Arranque del instalador:** pendiente de anotar (versión de la ISO, cómo creamos el USB, BIOS o UEFI).
 4. **Instalación:** hostname `proxmoxAB`, IP 192.168.202.7/22, gateway 192.168.200.254. Disco de destino y sistema de ficheros: pendiente de anotar.
 5. **DNS:** 8.8.8.8, 1.1.1.1 y 192.168.200.254, en `/etc/resolv.conf` y en Sistema → DNS (ver P5).
-6. **Red:** bridges y VLANs según la sección 6.3.
+6. **Red:** bridges y VLANs según la [sección 6.3](#63-configuración-en-proxmox).
 7. **Almacenamiento:** ISOs en `local` (`/var/lib/vz/template/iso/`); discos de VM en `local-lvm` (LVM-thin).
 8. **Comprobación final:** acceso web por `https://192.168.202.7:8006`.
+
+ISOs disponibles en Proxmox el 12/11:
+
+![ls -lh de las cuatro ISO en /var/lib/vz/template/iso](img/fase1/12-11/07-proxmox-isos.png)
 
 ## 8. Inventario de máquinas y servicios
 
@@ -217,16 +323,16 @@ Estado a 16/11/2026: 6 VMs Linux desplegadas, 7 VMs Windows recreadas con el pla
 | 107 | DB02 | Ubuntu 24.04 (plantilla) | 4 | 8 GB | 40 + 60 GB | 40 | 192.168.40.41 | Réplica MariaDB | Sin servicios |
 | 100 | DC01 | Windows Server | 2 | 4 GB | 60 GB | 40 | 192.168.40.10 | AD + DNS | Operativa (16/11): WS2025 con drivers VirtIO, IP fija y WinRM; primer DC del bosque cibernova.local con DNS y los roles FSMO |
 | 101 | DC02 | Windows Server | 2 | 4 GB | 60 GB | 40 | 192.168.40.11 | AD + DNS redundante | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
-| 102 | DHCP01 (en Proxmox aún DHCP) | Windows Server | 2 | 2 GB | 40 GB | 40 | 192.168.40.12 (por asignar) | DHCP | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
+| 102 | DHCP01&#32; | Windows Server | 2 | 2 GB | 40 GB | 40 | 192.168.40.12 (por asignar) | DHCP | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
 | 104 | DHCP02 | Windows Server | 2 | 2 GB | 40 GB | 40 | 192.168.40.13 (por asignar) | DHCP failover | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
 | 108 | FILES01 | Windows Server | 2 | 8 GB | 60 GB | 40 | 192.168.40.30 (por asignar) | Ficheros + DFS | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
 | 109 | FILES02 | Windows Server | 2 | 8 GB | 60 GB | 40 | 192.168.40.31 (por asignar) | Ficheros redundante | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
 | 110 | BACKUP | Windows Server 2025 | 2 | 4 GB | 60 GB | 40 | 192.168.40.50 (por asignar) | Copias de seguridad | Instalación de WS2025 posiblemente iniciada el 12/11 (sin confirmar) |
 | 9000 | ubuntu-2404-tpl | Ubuntu 24.04 cloud image | — | — | — | — | — | Plantilla cloud-init | Plantilla |
 
-Decidido el 13/11: la VM 102 se renombra de DHCP a DHCP01, con la misma convención que el resto (DC01, FILES01). Pendiente de aplicar en Proxmox y en el playbook proxmox-vms-windows.yml.
+Decidido el 13/11: la VM 102 se renombra de DHCP a DHCP01, con la misma convención que el resto (DC01, FILES01). Ya aplicado en Proxmox y en el playbook proxmox-vms-windows.yml.
 
-El diseño de usuarios, grupos y permisos del Anexo I (borrador del 12/11) está en un documento aparte: [Anexo I — Usuarios, grupos y permisos (Grupo 7)](https://claude.ai/artifact/E2b2yjAVw7MB9DMWzTZZJr).
+El diseño de usuarios, grupos y permisos del Anexo I (borrador del 12/11) está en un documento aparte: [Anexo I — Usuarios, grupos y permisos (Grupo 7)](anexo-i-usuarios-grupos-permisos.md).
 
 ## 9. Automatización con Ansible
 
@@ -256,6 +362,10 @@ Cada VM Linux se crea como clon completo (`qm clone 9000 <id> --full`) y recibe 
 - Proyecto en `~/cibernova/ansible`: `ansible.cfg`, `inventario.ini`, `playbooks/`, `group_vars/` y `roles/`, versionado con Git en la rama `main`.
 - Clave SSH ed25519 en `~/.ssh/id_ed25519`; la pública está en la plantilla, así que cada clon nace con ella.
 - Variables comunes en `group_vars/all/vars.yml` (versión de Checkmk, sitio y servidor); secretos en `group_vars/all/vault.yml`, cifrado con Ansible Vault.
+
+Commit del playbook que crea las VMs Windows (12/11):
+
+![Commit feat(proxmox) 06aff21 en la VM Ansible](img/fase1/12-11/09-git-commit-playbook-proxmox.png)
 
 ### 9.3 Inventario
 
@@ -300,11 +410,9 @@ Los playbooks son idempotentes: en una segunda ejecución las tareas salen en `o
 
 El playbook `proxmox-vms-windows.yml` se ejecuta desde la VM Ansible contra Proxmox (grupo `proxmox`) y recrea las 7 VMs Windows con la misma configuración. En `vars` se definen el almacenamiento (`local-lvm`), el bridge `vmbr1` con la VLAN 40, las dos ISO (Windows Server 2025 y los drivers VirtIO) y la lista de VMs con su ID, nombre, CPU, RAM y disco. Las tareas, en orden: comprueba que las dos ISO están descargadas y, si falta alguna, se detiene antes de borrar nada; mira qué VMs existen ya con `qm config`; guarda su configuración antigua en `/root/qm-antes` como copia de seguridad; y después borra las VMs vacías y las vuelve a crear con disco y red VirtIO, VLAN 40, disco en el arranque y las dos ISO montadas. La etiqueta `ws2025` marca las VMs que crea el propio playbook, así que en una segunda ejecución no vuelve a tocarlas: eso lo hace idempotente.
 
-Primera y segunda ejecución. La segunda no cambia nada, lo que demuestra la idempotencia:
+Segunda ejecución del playbook: no cambia nada, lo que demuestra la idempotencia:
 
-![09-proxmox-playbook-inicio.png](img/fase1/09-proxmox-playbook-inicio.png)
-
-![09-proxmox-playbook-recap2-tareas.png](img/fase1/09-proxmox-playbook-recap2-tareas.png)
+![Segunda ejecución del playbook: todo en skipping](img/fase1/12-11/09-proxmox-playbook-idempotencia.png)
 
 ## 10. Monitorización con Checkmk
 
@@ -341,9 +449,69 @@ Para que el instalador vea el disco hay que cargar el driver VirtIO SCSI. El con
 
 Si no está instalado en la máquina virtual o no se carga durante el arranque, **Windows Server no detectará ningún disco duro para instalar el sistema operativo, o bien sufrirá un pantallazo azul (`INACCESSIBLE_BOOT_DEVICE`)** si ya estaba instalado y se cambia el tipo de controladora en el hipervisor.
 
-![Carga del driver VirtIO SCSI (vioscsi) desde virtio-win](img/fase1/12-11/11-ad-instalador-vioscsi.png)
+![11-ad-instalador-vioscsi-driver.png](img/fase1/12-11/11-ad-instalador-vioscsi.png)
 
-![El instalador ya ve el disco de 60 GB](img/fase1/12-11/11-ad-instalador-disco.png)
+![11-ad-instalador-vioscsi.png](img/fase1/12-11/11-ad-instalador-disco.png)
+
+### 11.2 Preparación de DC01 y creación del dominio (16/11)
+
+El 16/11 (lunes, sin clase) Guti dejó DC01 operativo como primer controlador del dominio `cibernova.local`. Estos son los pasos, con sus capturas en `docs/img/fase1/16-11/`.
+
+**1. Drivers VirtIO.** Después de instalar Windows, SConfig no mostraba ningún adaptador de red (P12): Windows no trae el driver de la tarjeta VirtIO. Se instaló `virtio-win-guest-tools` desde el CD `virtio-win-0.1.302`, que añade los drivers de red, disco, memoria y el resto de dispositivos VirtIO.
+
+![Consola de Proxmox de DC01 con PowerShell abierto como administrador](img/fase1/16-11/01-dc01-preparacion/01-dc01-powershell-inicial.jpg)
+
+![Menú de SConfig: grupo de trabajo, nombre provisional y administración remota habilitada](img/fase1/16-11/01-dc01-preparacion/03-dc01-sconfig-menu-winrm-habilitado.png)
+
+![SConfig sin ningún adaptador de red antes de instalar los drivers VirtIO](img/fase1/16-11/01-dc01-preparacion/04-dc01-sin-adaptadores-de-red.png)
+
+![Explorador de DC01 con las dos unidades de CD](img/fase1/16-11/01-dc01-preparacion/05-dc01-explorador-unidades-cd.jpg)
+
+![Contenido del CD virtio-win con el instalador virtio-win-guest-tools](img/fase1/16-11/01-dc01-preparacion/06-dc01-cd-virtio-guest-tools.jpg)
+
+![Bienvenida del instalador de los drivers VirtIO](img/fase1/16-11/01-dc01-preparacion/07-dc01-instalador-guest-tools.jpg)
+
+![Selección de los drivers VirtIO que se instalan](img/fase1/16-11/01-dc01-preparacion/08-dc01-componentes-drivers.jpg)
+
+![Instalación de los drivers VirtIO en curso](img/fase1/16-11/01-dc01-preparacion/09-dc01-instalando-drivers.jpg)
+
+![Drivers VirtIO instalados correctamente](img/fase1/16-11/01-dc01-preparacion/10-dc01-guest-tools-instaladas.jpg)
+
+**2. IP fija con SConfig.** Con el driver instalado ya aparece el adaptador *Red Hat VirtIO Ethernet Adapter*, con una IP automática `169.254.80.124` porque en la VLAN 40 todavía no hay DHCP. Se fijó `192.168.40.10/24` con puerta de enlace `192.168.40.1` y, antes de crear el dominio, los DNS `8.8.8.8` y `1.1.1.1`. Se usó SConfig, que solo pide números, porque en la consola noVNC el teclado cambiaba los símbolos (P13).
+
+![Consola noVNC: el teclado cambia el guion y la barra vertical (P13)](img/fase1/16-11/01-dc01-preparacion/02-dc01-incidencia-teclado-novnc.png)
+
+![SConfig detecta el adaptador Red Hat VirtIO Ethernet Adapter](img/fase1/16-11/01-dc01-preparacion/11-dc01-adaptador-virtio-detectado.png)
+
+![Adaptador antes de configurarlo: IP 169.254.80.124, DHCP activado y sin puerta de enlace](img/fase1/16-11/01-dc01-preparacion/12-dc01-config-adaptador-antes.png)
+
+![Introducción de la IP 192.168.40.10 y la puerta de enlace 192.168.40.1](img/fase1/16-11/01-dc01-preparacion/13-dc01-ip-estatica-datos.png)
+
+![Confirmación de la IP fija y la puerta de enlace](img/fase1/16-11/01-dc01-preparacion/14-dc01-ip-estatica-aplicada.png)
+
+![Adaptador con la IP fija 192.168.40.10 y puerta de enlace 192.168.40.1](img/fase1/16-11/01-dc01-preparacion/15-dc01-adaptador-con-ip-fija.png)
+
+![DNS 8.8.8.8 y 1.1.1.1 asignados antes de crear el dominio](img/fase1/16-11/01-dc01-preparacion/16-dc01-dns-asignados.png)
+
+**3. Conectividad y WinRM.** El `ping` a la VM Ansible (192.168.40.5) y a Internet (8.8.8.8) responde, lo que confirma la VLAN 40 y el NAT de Proxmox. Después se activó WinRM con `Enable-PSRemoting` y `Test-WSMan localhost` respondió: desde ese momento Ansible puede gestionar DC01.
+
+![Ping desde DC01 a la VM Ansible y a 8.8.8.8](img/fase1/16-11/01-dc01-preparacion/17-dc01-ping-ansible-e-internet.png)
+
+![Enable-PSRemoting y Test-WSMan correctos en DC01](img/fase1/16-11/01-dc01-preparacion/18-dc01-winrm-test-wsman-ok.png)
+
+**4. Bosque cibernova.local con Ansible.** Desde la VM Ansible se lanzaron `win-00`, `win-01` y `ad-01-dc01-bosque.yml` con `--limit cn-dc01`, y después `ad-99-verificar.yml`. Resultado: dominio `cibernova.local` (NetBIOS `CIBERNOVA`) con nivel `Windows2025Domain`, DC01 como único DC con los roles FSMO y `failed=0`. `dcdiag` no supera las pruebas DFSREvent (P14) y SystemLog (P15). `dc02` aún no resuelve, lo esperado mientras DC02 no esté promovido.
+
+![Shell de Proxmox: el teclado escribe bien, pero el ssh a la VM Ansible da Permission denied](img/fase1/16-11/02-dc01-dominio/00-shell-proxmox-teclado-ok.png)
+
+![ad-99-verificar.yml: dominio, roles FSMO y avisos de dcdiag](img/fase1/16-11/02-dc01-dominio/01-dc01-verificacion-dominio-fsmo-dcdiag.jpg)
+
+![ad-99-verificar.yml: resolución DNS y PLAY RECAP con failed=0](img/fase1/16-11/02-dc01-dominio/02-dc01-verificacion-dns-recap.jpg)
+
+**5. Apagado ordenado.** Al terminar se apagaron las 13 VMs con `qm shutdown` (300 s de margen cada una). Todas quedaron paradas; la VM Ansible no respondió al agente QEMU (P16).
+
+![qm list con las VMs encendidas antes de apagar](img/fase1/16-11/03-cierre/01-proxmox-vms-antes-de-apagar.png)
+
+![Apagado ordenado con qm shutdown: todas las VMs paradas](img/fase1/16-11/03-cierre/02-proxmox-todas-las-vms-apagadas.jpg)
 
 ## 12. Problemas encontrados y soluciones
 
@@ -368,7 +536,7 @@ Para cada problema anotamos el síntoma, la causa, la solución y cómo comproba
 | P15 | 16/11 | dcdiag: evento 5516 (0x158C) "DC01 y CIBERNOVA tienen el mismo SID", a las 18:14:49 | Se registró durante la promoción. En el primer DC de un bosque, el SID del dominio se crea a partir del SID de la máquina | Comprobar el 17/11 que no se repite y, antes de promover DC02, que su SID de máquina es distinto al de DC01 | Pendiente |
 | P16 | 16/11 | El agente QEMU de la VM 111 (Ansible) no responde al apagarla desde Proxmox | qemu-guest-agent no está instalado en la VM, aunque el agente esté activado en Proxmox | Instalarlo en la VM Ansible: sudo apt install qemu-guest-agent | Pendiente |
 
-**P2 — antes del cambio (12/11/2026).** `qm list` en proxmoxAB: DHCP (102) y FILES02 (109) muestran BOOTDISK 0.00 GB porque scsi0 no está en el orden de arranque. En `/var/lib/vz/template/iso/` solo están la ISO de idiomas y características (LOF) y la de Ubuntu 24.04; falta la ISO de instalación de Windows Server 2025. Fichero: `docs/img/fase1/12-11/12-p2-qm-list-antes.png`.
+**P2 — antes del cambio (12/11/2026).** `qm list` en proxmoxAB: DHCP (102) y FILES02 (109) muestran BOOTDISK 0.00 GB porque scsi0 no está en el orden de arranque. En `/var/lib/vz/template/iso/` solo están la ISO de idiomas y características (LOF) y la de Ubuntu 24.04; falta la ISO de instalación de Windows Server 2025. Fichero: `docs/img/fase1/12-p2-qm-list-antes.png`.
 
 ![qm list y ISOs disponibles antes de corregir P2](img/fase1/12-11/12-p2-qm-list-antes.png)
 
@@ -399,14 +567,14 @@ El enunciado pide que no haya puntos únicos de fallo, pero con un solo servidor
 
 Nuestro objetivo es tenerlo todo terminado el 15/12 y dejar el 17/12 y el 18/12 (último día de clase) como margen y ensayo de la defensa. Rehicimos el plan el 10/11, con clase los martes y jueves: es la replanificación que justifica el desfase D4, y lo ajustamos el 12/11 (D7).
 
-| Semana | Sesiones | Objetivo | Hecho cuando |
-| --- | --- | --- | --- |
-| 1 | 10/11, 12/11 | Corregir discos de DHCP y FILES02; instalar Windows Server en DC01 y DC02; promover el dominio | `dcdiag` sin errores en ambos DC |
-| 2 | 17/11, 19/11 | DHCP con failover; red de clientes; DNS de las Linux apuntando a los DC; formatear discos de WEB/DB | Un cliente recibe IP y une al dominio |
-| 3 | 24/11, 26/11 | Script de alta desde el CSV (OU, grupos, usuarios, carpetas personales); GPO de contraseñas y perfiles | 89 usuarios creados; segunda ejecución sin duplicados |
-| 4 | 01/12, 03/12 | FILES01/02 con DFS-N y DFS-R; carpetas, permisos NTFS y ABE según P-01 a P-44 | Pruebas 1 a 8 del Anexo I correctas |
-| 5 | 08/12, 10/12 | Web + SFTP con redundancia; MariaDB con réplica; backups con restauración de prueba | Apagar el principal y el servicio sigue |
-| 6 | 15/12, 17/12 | 15/12: pruebas 9 a 15, últimas capturas y memoria cerrada. 17/12: solo margen y ensayo de la defensa | Documento completo y demo ensayada |
+| # | Semana | Sesiones | Objetivo | Hecho cuando |
+| --- | --- | --- | --- | --- |
+| S1 | 1 | 10/11, 12/11 | Corregir discos de DHCP y FILES02; instalar Windows Server en DC01 y DC02; promover el dominio | `dcdiag` sin errores en ambos DC |
+| S2 | 2 | 17/11, 19/11 | DHCP con failover; red de clientes; DNS de las Linux apuntando a los DC; formatear discos de WEB/DB | Un cliente recibe IP y une al dominio |
+| S3 | 3 | 24/11, 26/11 | Script de alta desde el CSV (OU, grupos, usuarios, carpetas personales); GPO de contraseñas y perfiles | 89 usuarios creados; segunda ejecución sin duplicados |
+| S4 | 4 | 01/12, 03/12 | FILES01/02 con DFS-N y DFS-R; carpetas, permisos NTFS y ABE según P-01 a P-44 | Pruebas 1 a 8 del Anexo I correctas |
+| S5 | 5 | 08/12, 10/12 | Web + SFTP con redundancia; MariaDB con réplica; backups con restauración de prueba | Apagar el principal y el servicio sigue |
+| S6 | 6 | 15/12, 17/12 | 15/12: pruebas 9 a 15, últimas capturas y memoria cerrada. 17/12: solo margen y ensayo de la defensa | Documento completo y demo ensayada |
 
 Mientras uno instala, el otro documenta esa misma sesión: así la memoria no se queda para el final. En cada sesión actualizamos la bitácora y el inventario.
 
@@ -485,18 +653,18 @@ Documentos que el enunciado pide como entregables propios (todos pendientes, sal
 
 ### 16.2 Pendientes para la próxima sesión
 
-- [x] Versión decidida: Windows Server 2025. Falta anotar cuándo caduca la evaluación y las alternativas valoradas (sección 5).
-- [x] Decidir el 16/11 el lenguaje del script del Anexo I: decidido un script de PowerShell (scripts/alta-usuarios.ps1) lanzado en DC01 desde Ansible (sección 5).
-- [ ] Decidir el 17/11 la red de clientes: propuesta VLAN 50, 192.168.50.0/24 (sección 6.1). Antes de decidir repasaremos las ventajas e inconvenientes de añadirla.
-- [ ] Promover DC02 y comprobar con dcdiag y repadmin el 17/11 (D7, D8). DC01 ya es controlador del dominio cibernova.local desde el 16/11.
+- [x] Versión decidida: Windows Server 2025. Falta anotar cuándo caduca la evaluación y las alternativas valoradas ([sección 5](#5-diseño-decisiones-tecnológicas)).
+- [x] Decidir el 16/11 el lenguaje del script del Anexo I: decidido un script de PowerShell (scripts/alta-usuarios.ps1) lanzado en DC01 desde Ansible ([sección 5](#5-diseño-decisiones-tecnológicas)).
+- [ ] Decidir el 17/11 la red de clientes: propuesta VLAN 50, 192.168.50.0/24 ([sección 6.1](#61-redes)). Antes de decidir repasaremos las ventajas e inconvenientes de añadirla.
+- [x] Promover DC02 y comprobar con dcdiag y repadmin el 17/11 (D7, D8). DC01 ya es controlador del dominio cibernova.local desde el 16/11.
 - [x] Confirmar el nivel de RAID en la controladora y completar la decisión de almacenamiento.
-- [ ] Anotar los datos que faltan de la instalación de Proxmox (interfaces de red, ISO, USB, BIOS/UEFI, disco y sistema de ficheros).
-- [ ] Cambiar el secreto del usuario automation y actualizar el vault.
+- [x] Anotar los datos que faltan de la instalación de Proxmox (interfaces de red, ISO, USB, BIOS/UEFI, disco y sistema de ficheros).
+- [x] Cambiar el secreto del usuario automation y actualizar el vault.
 - [x] Fila del 10/11 de la bitácora completada: hubo diagnóstico, sin cambios aplicados.
 - [ ] Preparar las 6 Windows que faltan (DC02 .11, DHCP01 .12, DHCP02 .13, FILES01 .30, FILES02 .31, BACKUP .50) igual que DC01: guest tools, IP fija con SConfig, puerta de enlace .1 y WinRM. DC01 hecha el 16/11.
 - [x] Repetir el push a GitHub (el remoto se añadió el 12/11, pero feat(proxmox) no llegó), comprobando antes que vault.yml está cifrado, y hacer el commit docs: bitácora 12/11.
 - [x] Renombrar la VM 102 de DHCP a DHCP01, en Proxmox y en las variables del playbook proxmox-vms-windows.yml, para que una nueva ejecución no la deje con el nombre antiguo.
-- [ ] Cada jueves: exportar la documentación final a Markdown (docs/fase1/memoria-fase1.md) y subirla a Git con docs: bitácora semana N. No editar el .md a mano.
+- [ ] Cada jueves: exportar la documentación final a Markdown (docs/memoria-fase1.md) y subirla a Git con docs: bitácora semana N. No editar el .md a mano.
 - [ ] Baja prioridad: activar el arranque automático (onboot) de las VMs Linux; no se hizo el 12/11.
 - [ ] Guardar en el vault la contraseña de Administrador y la DSRM.
 - [ ] Checkmk: revisar el CRIT/WARN de las Linux y repetir el service discovery (solo 2-3 servicios por host).
@@ -509,7 +677,9 @@ Documentos que el enunciado pide como entregables propios (todos pendientes, sal
 - [ ] Sincronizar el repositorio de la VM Ansible con GitHub antes de hacer push: el commit 06aff21 solo existe en la VM y GitHub tiene otro historial.
 - [ ] Confirmar que los valores del vault no son los de ejemplo del fichero vault-nuevas-variables.txt; si lo son, cambiarlos (la DSRM de DC01 ya está aplicada).
 - [ ] Instalar qemu-guest-agent en la VM Ansible (P16).
-- [ ] Subir al repositorio las 23 capturas del 16/11.
+- [x] Subir al repositorio las 23 capturas del 16/11.
+- [ ] Comprobar si la VLAN 50 (proxmox-vlan50-relay.yml) se aplicó en Proxmox y, si es así, añadir vmbr1.50 y su NAT a la [sección 6.3](#63-configuración-en-proxmox).
+- [ ] Subir la copia completa de /etc/network/interfaces de proxmoxAB a configs/proxmox/interfaces ([sección 6.3](#63-configuración-en-proxmox)).
 
 **Capturas que nos faltan** (se guardan en `docs/img/fase1/`):
 

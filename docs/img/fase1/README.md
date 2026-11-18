@@ -32,7 +32,7 @@ Carpeta [`12-11/`](12-11/). La columna *Sección* indica dónde se enlaza en la 
 
 ## 16/11/2026 — DC01: preparación, dominio y cierre
 
-Carpeta [`16-11/`](16-11/). Estas capturas todavía no están enlazadas en la memoria.
+Carpeta [`16-11/`](16-11/). Estas capturas se enlazan en el apartado 11.2 de la memoria.
 
 ### `01-dc01-preparacion/` — Drivers, red y WinRM en DC01
 
