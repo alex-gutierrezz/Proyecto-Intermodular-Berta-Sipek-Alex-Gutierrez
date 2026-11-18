@@ -44,3 +44,4 @@ Infraestructura virtualizada, redundante y documentada para CiberNova Solutions 
 - Commit al final de cada sesión de clase, con [Conventional Commits](https://www.conventionalcommits.org/es/) (`feat:`, `fix:`, `docs:`, `chore:`).
 - Ningún secreto en claro: las contraseñas van en `ansible/group_vars/all/vault.yml`, cifrado con Ansible Vault.
 - Las capturas se guardan en `docs/img/fase1/` con el número de la sección de la memoria delante (`06-…`, `09-…`, `12-…`).
+
