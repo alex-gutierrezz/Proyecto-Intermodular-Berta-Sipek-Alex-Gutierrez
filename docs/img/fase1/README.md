@@ -39,7 +39,7 @@ Carpeta [`16-11/`](16-11/). Estas capturas todavía no están enlazadas en la me
 | Fichero | Qué se ve |
 | --- | --- |
 | `01-dc01-powershell-inicial.jpg` | Consola de Proxmox (noVNC) de la VM 100 (DC01) con *Windows PowerShell* abierto como administrador sobre el Administrador del servidor |
-| `02-dc01-incidencia-teclado-novnc.png` | **Incidencia de teclado** en la consola noVNC: al escribir `Get-NetAdapter \| Format-Table ...` aparece `get'netadapter ç format'table`, porque la distribución del teclado no coincide (el guion sale como `'` y la barra vertical como `ç`) |
+| `02-dc01-incidencia-teclado-novnc.png` | **Incidencia de teclado** en la consola noVNC: al escribir `Get-NetAdapter \| Format-Table ...` (Sirve para mostrar los adaptadores de red del ordenador en una tabla, seleccionando únicamente tres datos concretos) aparece `get'netadapter ç format'table`, porque la distribución del teclado no coincide (el guion sale como `'` y la barra vertical como `ç`) |
 | `03-dc01-sconfig-menu-winrm-habilitado.png` | Menú de `SConfig` en Windows Server 2025 Standard Evaluation: grupo de trabajo `WORKGROUP`, nombre provisional `WIN-HNGB913JVHC`, **Administración remota habilitada** y Escritorio remoto deshabilitado |
 | `04-dc01-sin-adaptadores-de-red.png` | `SConfig` → *Configuración de red*: la lista de adaptadores sale **vacía** porque Windows aún no tiene el driver de la tarjeta VirtIO |
 | `05-dc01-explorador-unidades-cd.jpg` | Explorador de archivos de DC01: en el panel lateral se ven las dos unidades de CD, D: (instalador de WS2025) y E: (`virtio-win`) |
@@ -55,7 +55,7 @@ Carpeta [`16-11/`](16-11/). Estas capturas todavía no están enlazadas en la me
 | `15-dc01-adaptador-con-ip-fija.png` | Detalle del adaptador **después**: `192.168.40.10/24`, DHCP `False`, puerta de enlace `192.168.40.1` y todavía sin servidores DNS |
 | `16-dc01-dns-asignados.png` | Opción *Establecer servidores DNS*: se asignan `8.8.8.8` y `1.1.1.1`, antes de crear el dominio |
 | `17-dc01-ping-ansible-e-internet.png` | PowerShell de DC01: `ping 192.168.40.5` a la VM Ansible (0 % perdidos, < 1 ms) y `ping 8.8.8.8` a Internet (0 % perdidos, 12 ms), que confirma el routing y el NAT de Proxmox |
-| `18-dc01-winrm-test-wsman-ok.png` | `Enable-PSRemoting -Force -SkipNetworkProfileCheck` y `Test-WSMan localhost` con respuesta correcta (fabricante Microsoft, pila 3.0): **WinRM listo para Ansible** |
+| `18-dc01-winrm-test-wsman-ok.png` | `Enable-PSRemoting -Force -SkipNetworkProfileCheck`(Sirve para habilitar la administración remota de PowerShell en un equipo Windows, permitiendo que otros equipos puedan ejecutar comandos de PowerShell de forma remota) y `Test-WSMan localhost` (Sirve para comprobar si el servicio WinRM (Windows Remote Management) está funcionando correctamente en el propio ordenador) con respuesta correcta (fabricante Microsoft, pila 3.0): **WinRM listo para Ansible** |
 
 ### `02-dc01-dominio/` — Verificación del dominio
 
@@ -72,11 +72,4 @@ Carpeta [`16-11/`](16-11/). Estas capturas todavía no están enlazadas en la me
 | `01-proxmox-vms-antes-de-apagar.png` | `qm list` en proxmoxAB antes de apagar: en marcha DC01, WEB01, WEB02, DB01, DB02, Ansible y CMK; el resto parado |
 | `02-proxmox-todas-las-vms-apagadas.jpg` | Apagado con `qm shutdown <id> --timeout 300` en segundo plano para cada VM, con aviso de que el QEMU Guest Agent no responde en la 111 (Ansible); termina en `FIN` y el `qm list` final muestra **todas las VMs paradas** |
 
-## Enlazadas en la memoria pero sin subir
 
-| Fichero | Sección | Qué debe verse |
-| --- | --- | --- |
-| `09-proxmox-playbook-inicio.png` | 9.5 | Primera ejecución del playbook `proxmox-vms-windows.yml` (tareas en *changed*) |
-| `09-proxmox-playbook-recap2-tareas.png` | 9.5 | `PLAY RECAP` de la segunda ejecución |
-
-El resto de capturas pendientes está en la sección 16.2 de la memoria.
