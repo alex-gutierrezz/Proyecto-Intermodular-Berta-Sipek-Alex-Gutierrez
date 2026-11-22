@@ -7,10 +7,10 @@ Capturas de la Fase 1 (Infraestructura) que sirven de evidencia para la [`memori
 ```
 fase1/
 ├── 12-11/                      Preparación de las VMs Windows e instalación de WS2025
-└── 16-11/
-    ├── 01-dc01-preparacion/    Drivers VirtIO, IP fija, DNS y WinRM en DC01
-    ├── 02-dc01-dominio/        Verificación del dominio con Ansible
-    └── 03-cierre/              Apagado ordenado de las VMs en proxmoxAB
+├── 16-11/
+│   ├── 01-dc01-preparacion/    Drivers VirtIO, IP fija, DNS y WinRM en DC01
+│   ├── 02-dc01-dominio/        Verificación del dominio con Ansible
+│   └── 03-cierre/              Apagado ordenado de las VMs en proxmoxAB
 ├── 17-11/
 │   └── 04-firewalls/           Instalación y configuración base de FW01 y FW02 (OPNsense)
 └── 19-11/
@@ -23,6 +23,10 @@ fase1/
 ```
 
 ## 12/11/2026 — Preparación de las VMs Windows
+
+**De qué trata:** las 7 VMs Windows estaban mal creadas: tenían la ISO equivocada (la de idiomas, LOF), no tenían etiqueta de VLAN, usaban tarjetas `e1000` y dos no arrancaban desde el disco (P2). Se borraron y se volvieron a crear con un playbook de Ansible (`proxmox-vms-windows.yml`), con la ISO de Windows Server 2025, los drivers VirtIO y la VLAN 40. Después se empezó la instalación de Windows.
+
+**Qué hay en las capturas:** el estado de las VMs antes y después del cambio, el código del playbook y su commit, la prueba de que se puede ejecutar dos veces sin cambiar nada (idempotencia) y el instalador de Windows cargando el driver del disco VirtIO.
 
 Carpeta [`12-11/`](12-11/). La columna *Sección* indica dónde se enlaza en la memoria.
 
@@ -41,14 +45,18 @@ Carpeta [`12-11/`](12-11/). La columna *Sección* indica dónde se enlaza en la 
 
 ## 16/11/2026 — DC01: preparación, dominio y cierre
 
+**De qué trata:** primera sesión con Windows Server. Se preparó DC01, el primer controlador de dominio: drivers, red y administración remota. Después se creó y comprobó el dominio `cibernova.local` con Ansible, y al final se apagaron las VMs de forma ordenada.
+
 Carpeta [`16-11/`](16-11/). Estas capturas se enlazan en el apartado 11.2 de la memoria.
 
 ### `01-dc01-preparacion/` — Drivers, red y WinRM en DC01
 
+**De qué trata:** dejar DC01 listo para gestionarlo desde Ansible. Se instalaron los drivers VirtIO (sin ellos Windows no ve la tarjeta de red), se le puso la IP fija `192.168.40.10` con su puerta de enlace y sus DNS y se activó WinRM, que es por donde Ansible se conecta a Windows. Las capturas siguen ese orden e incluyen una incidencia de teclado en la consola de Proxmox (P13).
+
 | Fichero | Qué se ve |
 | --- | --- |
 | `01-dc01-powershell-inicial.jpg` | Consola de Proxmox (noVNC) de la VM 100 (DC01) con *Windows PowerShell* abierto como administrador sobre el Administrador del servidor |
-| `02-dc01-incidencia-teclado-novnc.png` | **Incidencia de teclado** en la consola noVNC: al escribir `Get-NetAdapter \| Format-Table ...` (Sirve para mostrar los adaptadores de red del ordenador en una tabla, seleccionando únicamente tres datos concretos) aparece `get'netadapter ç format'table`, porque la distribución del teclado no coincide (el guion sale como `'` y la barra vertical como `ç`) |
+| `02-dc01-incidencia-teclado-novnc.png` | **Incidencia de teclado** en la consola noVNC (P13). Se escribió `Get-NetAdapter \| Format-Table ...`, que muestra en una tabla los adaptadores de red, pero apareció `get'netadapter ç format'table`. La distribución del teclado de la consola no coincide con la del PC: el guion sale como `'` y la barra vertical como `ç` |
 | `03-dc01-sconfig-menu-winrm-habilitado.png` | Menú de `SConfig` en Windows Server 2025 Standard Evaluation: grupo de trabajo `WORKGROUP`, nombre provisional `WIN-HNGB913JVHC`, **Administración remota habilitada** y Escritorio remoto deshabilitado |
 | `04-dc01-sin-adaptadores-de-red.png` | `SConfig` → *Configuración de red*: la lista de adaptadores sale **vacía** porque Windows aún no tiene el driver de la tarjeta VirtIO |
 | `05-dc01-explorador-unidades-cd.jpg` | Explorador de archivos de DC01: en el panel lateral se ven las dos unidades de CD, D: (instalador de WS2025) y E: (`virtio-win`) |
@@ -64,9 +72,11 @@ Carpeta [`16-11/`](16-11/). Estas capturas se enlazan en el apartado 11.2 de la 
 | `15-dc01-adaptador-con-ip-fija.png` | Detalle del adaptador **después**: `192.168.40.10/24`, DHCP `False`, puerta de enlace `192.168.40.1` y todavía sin servidores DNS |
 | `16-dc01-dns-asignados.png` | Opción *Establecer servidores DNS*: se asignan `8.8.8.8` y `1.1.1.1`, antes de crear el dominio |
 | `17-dc01-ping-ansible-e-internet.png` | PowerShell de DC01: `ping 192.168.40.5` a la VM Ansible (0 % perdidos, < 1 ms) y `ping 8.8.8.8` a Internet (0 % perdidos, 12 ms), que confirma el routing y el NAT de Proxmox |
-| `18-dc01-winrm-test-wsman-ok.png` | `Enable-PSRemoting -Force -SkipNetworkProfileCheck`(Sirve para habilitar la administración remota de PowerShell en un equipo Windows, permitiendo que otros equipos puedan ejecutar comandos de PowerShell de forma remota) y `Test-WSMan localhost` (Sirve para comprobar si el servicio WinRM (Windows Remote Management) está funcionando correctamente en el propio ordenador) con respuesta correcta (fabricante Microsoft, pila 3.0): **WinRM listo para Ansible** |
+| `18-dc01-winrm-test-wsman-ok.png` | Activación y prueba de WinRM, el servicio por el que Ansible se conecta a Windows. `Enable-PSRemoting -Force -SkipNetworkProfileCheck` permite ejecutar PowerShell en DC01 desde otros equipos y `Test-WSMan localhost` comprueba que WinRM responde. La respuesta es correcta (fabricante Microsoft, pila 3.0): **WinRM listo para Ansible** |
 
 ### `02-dc01-dominio/` — Verificación del dominio
+
+**De qué trata:** comprobar desde la VM Ansible que el dominio `cibernova.local` se creó bien. Un playbook revisa el nivel del dominio, los roles FSMO de DC01, el estado del DC (`dcdiag`) y que el DNS resuelve los servidores. Las capturas muestran el resultado y los dos fallos de `dcdiag` que salieron (P14 y P15). También hay una prueba previa de SSH de Proxmox a la VM Ansible, que fue rechazada.
 
 | Fichero | Qué se ve |
 | --- | --- |
@@ -75,6 +85,8 @@ Carpeta [`16-11/`](16-11/). Estas capturas se enlazan en el apartado 11.2 de la 
 | `02-dc01-verificacion-dns-recap.jpg` | Continuación: resolución DNS (`dc01` → `192.168.40.10`, `db01` → `192.168.40.40`, `web01` → `192.168.100.30`, `www.google.com` resuelve; **`dc02` no resuelve**), resumen de replicación vacío (solo hay un DC), la parte de DHCP en *skipping* (sin hosts) y `PLAY RECAP` de `cn-dc01` con `ok=5`, `changed=0` y `failed=0` |
 
 ### `03-cierre/` — Apagado ordenado
+
+**De qué trata:** cerrar la sesión sin dañar nada. Se apagaron las VMs una a una desde Proxmox (`qm shutdown`), dando a cada una hasta 5 minutos para cerrarse sola en lugar de cortarles la corriente. Las capturas muestran qué VMs estaban en marcha antes y que al final quedaron todas paradas.
 
 | Fichero | Qué se ve |
 | --- | --- |
@@ -85,50 +97,60 @@ Carpeta [`16-11/`](16-11/). Estas capturas se enlazan en el apartado 11.2 de la 
 
 ## 17/11/2026 — Firewalls OPNsense (FW01 y FW02)
 
+**De qué trata:** se montaron los dos firewalls de la infraestructura, FW01 y FW02, como VMs con OPNsense 26.7. Van a sustituir a Proxmox como router y NAT. En esta sesión se dejaron instalados y con la configuración básica. La alta disponibilidad entre los dos se termina el 19/11.
+
 Carpeta [`17-11/04-firewalls/`](17-11/04-firewalls/). Estas capturas se enlazan en el apartado 6.4 de la memoria. El zip de la sesión traía también las carpetas `01` a `03`, que son las del 16/11 y ya están en [`16-11/`](16-11/).
+
+### `04-firewalls/` — Instalación y configuración base de FW01 y FW02
+
+**De qué trata:** todo el montaje de los firewalls, en orden. Primero se comprobó qué VHID libres había en la red del aula y se guardó una copia de la red de Proxmox. Después se crearon las dos VMs y se instaló OPNsense en cada una. Luego se asignaron las interfaces y las IP de LAN y WAN por consola y se pasó el asistente web. Por último se crearon las primeras reglas (SYNC y TEMPORAL). Incluye la incidencia del DHCP del aula en FW02 (P20).
 
 | Fichero | Qué se ve |
 | --- | --- |
 | `01-proxmox-escaneo-vhid-carp-aula.jpg` | Consola de proxmoxAB con `tcpdump` de anuncios VRRP/CARP en la red del aula: ya se usan el **vrid 8** (desde 192.168.202.38) y el **vrid 34** (desde 192.168.202.35), por eso elegimos el VHID 7 |
-| `02-proxmox-backup-red-y-versiones-opnsense.png` | Copias de la red de Proxmox (`/root/interfaces.bak`, `interfaces.pre-ad` y la nueva **`interfaces.pre-firewall`** del 17/11), versiones de OPNsense publicadas (de la 24.7 a la **26.7**) y la carpeta de ISO |
+| `02-proxmox-backup-red-y-versiones-opnsense.png` | Preparación antes de tocar la red. Se ven las copias de la configuración de red de Proxmox (`/root/interfaces.bak`, `interfaces.pre-ad` y la nueva **`interfaces.pre-firewall`** del 17/11), que sirven para volver atrás si algo falla. También se ve la lista de versiones de OPNsense publicadas (de la 24.7 a la **26.7**), consultada para descargar la más reciente, y la carpeta de ISO de Proxmox donde se guarda |
 | `03-proxmox-iso-opnsense-checksum-ok.png` | Descarga de `OPNsense-26.7-dvd-amd64.iso.bz2` (471 MB) y su SHA256, que coincide con el publicado |
-| `04-proxmox-vms-fw01-fw02-creadas.png` | Creación de las VMs **113 (FW01)** y **114 (FW02)** y `qm config` de FW01: 2 núcleos `host`, 4096 MB, disco de 20 GB en `local-lvm`, ISO de OPNsense en ide2, `onboot: 1`, etiqueta `firewall` y 5 tarjetas VirtIO: `net0` en `vmbr0` y `net1` a `net4` en `vmbr1` con las etiquetas 40, 50, 100 y 99 |
+| `04-proxmox-vms-fw01-fw02-creadas.png` | Creación de las dos VMs de los firewalls y su configuración (`qm config` de FW01):<br>• VMs **113 (FW01)** y **114 (FW02)**<br>• 2 núcleos tipo `host`, 4 GB de RAM y disco de 20 GB en `local-lvm`<br>• ISO de OPNsense montada en ide2 y arranque automático (`onboot: 1`)<br>• 5 tarjetas de red: `net0` en `vmbr0` (WAN, red del aula) y `net1` a `net4` en `vmbr1` con las VLAN 40, 50, 100 y 99 |
 | `05-fw01-modo-live-lan-en-vtnet0-riesgo-dhcp.jpg` | Modo live de OPNsense en FW01: por defecto asigna **LAN → vtnet0**, que es la red del aula; con un DHCP activo en esa LAN habría repartido IPs al aula (P17) |
-| `06-proxmox-link-down-wan-durante-instalacion.png` | `qm set` de las VMs 113 y 114: `net0` en `vmbr0` con **`link_down=1`** mientras se instala |
-| `07-fw01-instalador-menu.jpg` | Menú del instalador de OPNsense 26.7 con las opciones *Install (ZFS)* e *Install (UFS)* |
-| `08-fw01-confirmar-disco-da0.jpg` | *UFS Configuration*: confirmación para borrar el disco `da0` |
+| `06-proxmox-link-down-wan-durante-instalacion.png` | Se «desenchufa» el cable virtual de la WAN (`link_down=1` en `net0`) de las VMs 113 y 114 mientras se instala OPNsense. El modo live de OPNsense pone su LAN en la tarjeta que está en la red del aula y podría repartir IPs por DHCP a los equipos de clase (P17). Con la WAN desconectada no hay riesgo |
+| `07-fw01-instalador-menu.jpg` | Menú del instalador de OPNsense 26.7, que pregunta con qué sistema de ficheros instalar. **ZFS** es moderno y avanzado (instantáneas, comprobación de datos), pero gasta más RAM. **UFS** es el clásico de FreeBSD: sencillo y ligero. Elegimos UFS |
+| `08-fw01-confirmar-disco-da0.jpg` | El instalador pide confirmación para borrar el disco `da0`, que es el disco virtual de 20 GB de la VM. OPNsense se instala ocupando todo el disco, así que hay que borrarlo. Es una VM nueva y el disco estaba vacío, así que no se pierde nada |
 | `09-fw01-instalando.jpg` | Progreso de la instalación en FW01 |
 | `10-fw01-configuracion-final-root.jpg` | *Final Configuration*: cambio de la contraseña de root y *Complete Install* |
 | `11-fw02-instalando.jpg` | Progreso de la instalación en FW02 |
-| `12-fw01-asignacion-interfaces.jpg` | Asignación de interfaces en la consola de FW01: WAN → vtnet0, LAN → vtnet1, OPT1 → vtnet2, OPT2 → vtnet3 y OPT3 → vtnet4 |
+| `12-fw01-asignacion-interfaces.jpg` | En la consola de FW01 se dice qué tarjeta de red hace cada función. `vtnetX` es el nombre que da FreeBSD (la base de OPNsense) a las tarjetas VirtIO de Proxmox: `vtnet0` es la `net0`, `vtnet1` la `net1` y así sucesivamente. Queda: WAN → vtnet0 (aula), LAN → vtnet1 (VLAN 40), OPT1 → vtnet2 (VLAN 50), OPT2 → vtnet3 (VLAN 100) y OPT3 → vtnet4 (VLAN 99, SYNC) |
 | `13-fw01-lan-wan-configuradas.jpg` | Menú de consola de FW01 (OPNsense 26.7): LAN `192.168.40.2/24` y WAN `192.168.202.84/22`; las OPT todavía sin IP |
 | `14-fw01-ping-internet-ok.jpg` | Opción 7 (*Ping host*) desde FW01 a `8.8.8.8`: 3 paquetes, 0 % perdidos, unos 11 ms |
 | `15-fw02-asignacion-interfaces.jpg` | La misma asignación de interfaces en FW02 |
-| `16-fw02-incidencia-dhclient-antiguo.png` | Procesos `dhclient` que siguen vivos en `vtnet0` y `vtnet1` de FW02 (P20) |
+| `16-fw02-incidencia-dhclient-antiguo.png` | Incidencia P20: FW02 había cogido una IP del DHCP del aula (192.168.200.67) en vez de la fija. La causa eran procesos `dhclient` (el programa que pide IP por DHCP) que se habían quedado en marcha en `vtnet0` y `vtnet1` desde antes de poner las IP fijas. Se resolvió reiniciando los dos firewalls |
 | `17-fw02-reinicio-limpio-lan-wan.jpg` | FW02 después del reinicio limpio: LAN `192.168.40.3/24` y WAN `192.168.202.85/22` |
 | `18-fw01-reinicio-limpio-lan-wan.jpg` | FW01 después del reinicio limpio: LAN `192.168.40.2/24` y WAN `192.168.202.84/22` |
 | `19-proxmox-ping-y-web-gui-ambos-fw-ok.png` | Desde proxmoxAB: ping a 192.168.40.2 y 192.168.40.3 correcto y web de FW01 y FW02 con **HTTP 200** |
 | `20-fw01-asistente-datos-generales.png` | Asistente web de FW01: hostname `fw01`, dominio `cibernova.local`, zona `Europe/Madrid`, DNS 8.8.8.8 y 1.1.1.1 y Unbound activado |
-| `21-fw01-asistente-wan-gateway.png` | Asistente de FW01, WAN estática `192.168.202.84/22`, puerta de enlace `192.168.200.254` y **Block RFC1918 Private Networks desmarcado** (la WAN es la red privada del aula) |
-| `22-fw01-asistente-terminado.jpg` | *Finished initial configuration!* en FW01 (`root@fw01.cibernova.local`) |
+| `21-fw01-asistente-wan-gateway.png` | Paso de la WAN en el asistente web de FW01: IP fija `192.168.202.84/22` y puerta de enlace `192.168.200.254` (el router del aula). Se desmarca **Block RFC1918 Private Networks**, una opción que bloquea en la WAN las IP privadas (192.168.x.x, 10.x.x.x…). Nuestra WAN es la red privada del aula, así que con ese bloqueo no saldría nada |
+| `22-fw01-asistente-terminado.jpg` | Final del asistente web de FW01 (*Finished initial configuration!*): la configuración básica (nombre, dominio, DNS, LAN y WAN) ya está aplicada. Arriba se ve `root@fw01.cibernova.local`, es decir, el usuario root conectado al equipo `fw01` del dominio `cibernova.local`. Eso confirma que se aplicaron el nombre y el dominio |
 | `23-fw01-reglas-sync-clientes-dmz.jpg` | *Firewall: Rules* de FW01: regla flotante **TEMPORAL** que permite todo desde CLIENTES y DMZ (se restringe en la Fase 3), reglas por defecto de la LAN y regla **SYNC** que permite pfsync y XMLRPC entre FW01 y FW02 |
 | `24-fw02-asistente-datos-generales.jpg` | Asistente web de FW02: hostname `fw02` con los mismos datos que FW01 |
 | `25-fw02-asistente-terminado.jpg` | *Finished initial configuration!* en FW02 (`root@fw02.cibernova.local`) |
 | `26-fw02-interfaces-configuradas.jpg` | *Interfaces: Overview* de FW02: WAN `192.168.202.85/22` con gateway `192.168.200.254`, LAN `192.168.40.3/24`, CLIENTES `192.168.50.3/24`, DMZ `192.168.100.3/24` y SYNC `192.168.99.2/24` |
-| `27-fw02-regla-sync-aplicada.jpg` | *Firewall: Rules* de FW02 con la regla SYNC aplicada (la regla TEMPORAL llegará al sincronizar desde FW01) |
+| `27-fw02-regla-sync-aplicada.jpg` | Reglas de FW02 con la regla **SYNC** aplicada. OPNsense bloquea por defecto todo el tráfico en una interfaz nueva. Esta regla permite el tráfico entre FW01 y FW02 por la VLAN 99 para que puedan sincronizarse (pfsync y XMLRPC). Se crea a mano en los dos, porque sin ella FW02 no podría recibir la sincronización. El resto de reglas, como la TEMPORAL, le llegan después desde FW01 |
 
 ## 19/11/2026 — Firewalls en HA, DC02, estructura de AD y DHCP con failover
+
+**De qué trata:** la sesión con más avances de la Fase 1. Los firewalls pasan a funcionar en alta disponibilidad y sustituyen a Proxmox como router. Se añade el segundo controlador de dominio (DC02), se crea la estructura de Active Directory y se monta el DHCP con dos servidores en failover. Al final se ajustan la RAM y la CPU de todas las VMs.
 
 Carpeta [`19-11/`](19-11/). Estas capturas se enlazan en los apartados 6.4, 8.1 y 11.3 de la memoria. El zip de la sesión traía también las capturas 24 a 27 de `04-firewalls`, que son las del 17/11 y ya están en [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 ### `04-firewalls/` — HA, VIP CARP, NAT, corte de red y failover
 
+**De qué trata:** terminar la alta disponibilidad de los firewalls y ponerlos en servicio. FW01 copia a FW02 su configuración y las conexiones abiertas; los dos comparten las IP de puerta de enlace (VIP CARP) y las redes internas salen a Internet por la VIP de la WAN (NAT). Después se hizo el corte: Proxmox dejó de ser el router. Por último se probó el failover apagando FW01 con un ping en marcha, que no se cortó.
+
 La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 | Fichero | Qué se ve |
 | --- | --- |
-| `28-fw01-ha-ajustes.jpg` | *System: High Availability: Settings* en FW01: estados por **SYNC**, *Synchronize Peer IP* y *Synchronize Config* a `192.168.99.2`, usuario `root` (contraseña vacía en la captura) y *Select All* en los servicios a sincronizar |
-| `29-fw01-ha-conectado-con-fw02.jpg` | *High Availability: Status* en FW01: ve las versiones de FW02 (firmware, base y kernel **26.7**) y la lista de servicios, con *Synchronize and reconfigure all* |
+| `28-fw01-ha-ajustes.jpg` | Configuración de la alta disponibilidad en FW01 (*System: High Availability: Settings*). Se le dice que copie a FW02 (`192.168.99.2`), por la interfaz SYNC, dos cosas: el estado de las conexiones abiertas (pfsync), para que no se corten si FW01 cae, y la configuración (XMLRPC), con el usuario `root` y todos los servicios marcados. La contraseña no aparece en la captura |
+| `29-fw01-ha-conectado-con-fw02.jpg` | Comprobación de que FW01 se comunica con FW02 (*High Availability: Status*). FW01 consigue leer las versiones de FW02 (firmware, base y kernel 26.7), así que la conexión por XMLRPC funciona. Desde aquí se pulsa *Synchronize and reconfigure all* para copiar la configuración de FW01 a FW02 |
 | `30-fw01-carp-wan-master.jpg` | *Virtual IPs: Status* en FW01: la VIP de la WAN `192.168.202.86` con **VHID 7** (freq. 1/0) en **MASTER** |
 | `31-fw02-carp-wan-backup.jpg` | La misma VIP en FW02, con VHID 7 (freq. 1/100) en **BACKUP** |
 | `32-fw01-nat-salida-vip.jpg` | *Firewall: NAT: Source NAT* en modo **Hybrid**: regla en la WAN con origen `REDES_INTERNAS` traducido a `192.168.202.86` |
@@ -143,6 +165,8 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 ### `05-dc02/` — Preparación, promoción y réplica de DC02
 
+**De qué trata:** añadir un segundo controlador de dominio para que AD y DNS no dependan solo de DC01. Se instalaron los drivers VirtIO, se configuraron la IP `192.168.40.11`, el DNS y WinRM, y se comprobó que su SID de máquina es distinto del de DC01. Después se promovió a controlador de dominio y se verificó que los dos DC se replican sin errores.
+
 | Fichero | Qué se ve |
 | --- | --- |
 | `01-dc02-instalador-guest-tools.jpg` | Consola de la VM 101 (DC02): `virtio-win-guest-tools` en el CD E: (`virtio-win-0.1.302`) y la bienvenida del instalador |
@@ -153,12 +177,16 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 ### `06-dhcp01/` y `07-dhcp02/` — Drivers VirtIO
 
+**De qué trata:** primer paso para preparar los dos servidores DHCP. Igual que en DC01 y DC02, se instalaron los drivers VirtIO para que Windows reconozca la tarjeta de red y el disco. Sin ellos no se pueden configurar la red ni WinRM, ni unirlos al dominio.
+
 | Fichero | Qué se ve |
 | --- | --- |
 | `06-dhcp01/01-dhcp01-guest-tools-instaladas.jpg` | Consola de la VM 102 (DHCP01): *Installation Successfully* del instalador de guest tools, con el CD `virtio-win-0.1.302` en D: |
 | `07-dhcp02/01-dhcp02-guest-tools-instaladas.jpg` | Lo mismo en la VM 104 (DHCP02), con el CD en E: |
 
 ### `08-ad-estructura-dhcp/` — OUs, unión al dominio y DHCP
+
+**De qué trata:** tres playbooks de Ansible seguidos. El primero crea la estructura de Active Directory: las unidades organizativas (OU) y la directiva de contraseñas y bloqueo. El segundo une DHCP01 y DHCP02 al dominio. El tercero crea el ámbito DHCP de la VLAN 50 y el failover entre los dos servidores, que se reparten las IPs al 50 % y se cubren si uno cae.
 
 | Fichero | Qué se ve |
 | --- | --- |
@@ -167,6 +195,8 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | `03-dhcp-ambito-failover-ok.png` | `dhcp-01-failover.yml`: autorización en AD, ámbito y opciones creados y failover `CN-DHCP01-DHCP02` en modo **LoadBalance 50 %**, socio `dhcp02.cibernova.local` y estado **Normal**; `PLAY RECAP` sin fallos |
 
 ### `09-redimensionado/` — RAM y CPU
+
+**De qué trata:** ajustar los recursos de cada VM a la carga real de su servicio, para no reservar memoria y núcleos que no se usan. Quedaron 36 vCPU y 78 GB asignados de los 128 GB del servidor. La captura muestra los núcleos y la memoria de cada VM después del cambio y la memoria total del host.
 
 | Fichero | Qué se ve |
 | --- | --- |
