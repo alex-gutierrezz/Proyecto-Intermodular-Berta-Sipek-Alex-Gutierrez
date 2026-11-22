@@ -160,8 +160,9 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | `36-ansible-internet-por-firewall-ok.jpg` | Prueba de salida a Internet desde la VM Ansible (192.168.40.5) con `ping 8.8.8.8` sin pérdidas. Ahora el tráfico ya no pasa por Proxmox, sino por la VIP `192.168.40.1` de los firewalls y su NAT. Este mismo ping se deja en marcha para la prueba de failover de la captura 37 |
 | `37-failover-ping-sin-cortes-fw01-apagado.jpg` | **Prueba de failover**: se apaga FW01 mientras sigue el ping de la captura 36. `icmp_seq` es el número de cada ping; si se perdiera alguno, habría un salto en la numeración. No hay ninguno, así que FW02 tomó el relevo sin cortar la conexión, gracias a CARP (la VIP) y a pfsync (las conexiones abiertas) |
 | `38-failover-fw02-master.jpg` | FW02 durante el failover, con FW01 apagado: sus cuatro VIP han pasado de BACKUP a **MASTER**. Ahora FW02 hace de puerta de enlace y de NAT para todas las redes. Junto con la captura 37, demuestra que la alta disponibilidad funciona |
-| `39-failback-fw01-recupera-master.jpg` | Tenía que mostrar el *failback*, es decir, que al volver a encender FW01 este recupera las VIP en MASTER y FW02 vuelve a BACKUP. Pero el fichero es **idéntico** a la captura 34 (FW02 en BACKUP, antes de la prueba). El failback sí se comprobó con `tcpdump` en `vmbr1.40`, viendo los anuncios CARP, pero falta repetir la captura |
 | `40-ansible-inventario-proxmox-40-4.png` | Cambios en la VM Ansible tras el corte. El inventario conecta ahora con proxmoxAB por la `192.168.40.4`: la .40.1 es la VIP de los firewalls y con ella Ansible entraría en un firewall. En `cibernova-dominio.yml`, el paso 7 (`proxmox-vlan50-relay.yml`) queda comentado como obsoleto porque la VLAN 50 ya la gestionan los firewalls |
+
+No hay captura 39: la que había era idéntica a la 34 y se eliminó. Falta repetir el *failback* (volver a encender FW01 y comprobar que recupera las VIP en MASTER) y capturarlo.
 
 ### `05-dc02/` — Preparación, promoción y réplica de DC02
 

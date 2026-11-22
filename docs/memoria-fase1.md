@@ -1,6 +1,6 @@
 # Fase 1 — Infraestructura CiberNova (Documentación)
 
-**Grupo 7:** Berta Sipek y Alex Gutiérrez · **Actualizado:** 21/11/2026
+**Grupo 7:** Berta Sipek y Alex Gutiérrez · **Actualizado:** 22/11/2026
 
 ## Índice
 
@@ -246,8 +246,8 @@ Dividimos la red en VLAN 40 (servidores internos) y VLAN 100 (DMZ con los servid
 | Término | Qué es | En CiberNova |
 | --- | --- | --- |
 | OPNsense | Sistema operativo de firewall de código abierto basado en FreeBSD, que se gestiona por web. Hace de router, firewall con reglas por interfaz, NAT, relay DHCP y VPN | FW01 y FW02 son dos VMs con OPNsense 26.7 que sustituyen a Proxmox como router y NAT |
-| WAN y LAN | Nombres de las interfaces de un firewall. La WAN es la que da al exterior, por donde se sale a Internet. La LAN es la que da a la red interna que protege | La WAN de FW01 y FW02 está en la red del aula (vmbr0). Su VIP, 192.168.202.86 con VHID 7, es la IP con la que salen a Internet todas las VLAN internas gracias al NAT de salida (figura 6.4.7), y sigue siendo la misma aunque caiga FW01. La LAN es la VLAN 40; además, los firewalls tienen las interfaces CLIENTES (50), DMZ (100) y SYNC (99) |
-| HA (alta disponibilidad, *High Availability*) | Montar un servicio en dos (o más) máquinas para que, si una cae, la otra siga dando el servicio sin que los usuarios tengan que cambiar nada. Se consigue con una IP compartida (CARP), copiando las conexiones (pfsync) y copiando la configuración (XMLRPC) | FW01 y FW02 forman una pareja HA: si se apaga FW01, FW02 sigue haciendo de router, firewall y NAT, como se probó en el failover (figuras 6.4.9 a 6.4.11) |
+| WAN y LAN | Nombres de las interfaces de un firewall. La WAN es la que da al exterior, por donde se sale a Internet. La LAN es la que da a la red interna que protege | La WAN de FW01 y FW02 está en la red del aula (vmbr0). Su VIP, 192.168.202.86 con VHID 7, es la IP con la que salen a Internet todas las VLAN internas gracias al NAT de salida (figura 6.4.8), y sigue siendo la misma aunque caiga FW01. La LAN es la VLAN 40; además, los firewalls tienen las interfaces CLIENTES (50), DMZ (100) y SYNC (99) |
+| HA (alta disponibilidad, *High Availability*) | Montar un servicio en dos (o más) máquinas para que, si una cae, la otra siga dando el servicio sin que los usuarios tengan que cambiar nada. Se consigue con una IP compartida (CARP), copiando las conexiones (pfsync) y copiando la configuración (XMLRPC) | FW01 y FW02 forman una pareja HA: si se apaga FW01, FW02 sigue haciendo de router, firewall y NAT, como se probó en el failover (figuras 6.4.10 a 6.4.12) |
 | CARP (*Common Address Redundancy Protocol*) | Protocolo de redundancia de la puerta de enlace, equivalente libre a VRRP o a HSRP de Cisco. Varios equipos comparten una misma IP; el que la tiene (MASTER) envía anuncios periódicos y, si deja de enviarlos, otro (BACKUP) se queda con la IP | FW01 es MASTER y FW02 BACKUP; si FW01 cae, FW02 asume las IP en segundos |
 | VIP (IP virtual) | La IP compartida por CARP. No pertenece a ninguna máquina concreta, sino al grupo | 192.168.40.1 es la puerta de enlace de los servidores aunque las IP reales de los firewalls sean la .2 y la .3 |
 | VHID (*Virtual Host ID*) | Es el número que identifica a cada pareja CARP, del 1 al 255. Los dos firewalls que comparten una VIP usan el mismo número en sus anuncios, y así saben que hablan de la misma IP. El número también forma la MAC de la VIP: termina en el VHID en hexadecimal (con VHID 7, 00:00:5e:00:01:07). Si otro equipo del aula usara el mismo VHID en la misma red, sus firewalls y los nuestros se tomarían por la misma pareja y las VIP chocarían: por eso cada grupo usa un número distinto. | Tenemos cuatro VIP, cada una con su VHID. En la WAN (red del aula) usamos el 7: antes de elegirlo vimos con tcpdump que otros equipos del aula ya usaban el 8 y el 34 (figura 6.4.2), y el 7 estaba libre. En las VLAN internas (40, 50 y 100) no hay nadie más, porque no salen del servidor, así que usamos como VHID el mismo número de la VLAN para recordarlo fácilmente. |
@@ -430,7 +430,7 @@ Pendiente: pegar en esta sección el fichero real actual y subirlo al repositori
 
 ### 6.4 Firewalls OPNsense en alta disponibilidad (17/11)
 
-FW01 y FW02 dan servicio: HA, VIP CARP y NAT de salida configurados, corte de la red de Proxmox hecho y failover probado sin perder paquetes. Las capturas de la instalación (17/11) están en `docs/img/fase1/17-11/04-firewalls`; las de la HA, el corte de red y el failover (19/11), en `docs/img/fase1/19-11/04-firewalls`. Lo que muestra cada una está en `docs/img/fase1/README.md`, y abajo, en la figura 6.4.12, se ve el resultado final: FW01 como MASTER de la VIP de la WAN.
+FW01 y FW02 dan servicio: HA, VIP CARP y NAT de salida configurados, corte de la red de Proxmox hecho y failover probado sin perder paquetes. Las capturas de la instalación (17/11) están en `docs/img/fase1/17-11/04-firewalls`; las de la HA, el corte de red y el failover (19/11), en `docs/img/fase1/19-11/04-firewalls`. Lo que muestra cada una está en `docs/img/fase1/README.md`, y abajo, en la figura 6.4.13, se ve el resultado final: FW01 como MASTER de la VIP de la WAN.
 
 Los conceptos que usa este apartado (OPNsense, WAN y LAN, HA, CARP, VIP, VHID, pfsync y XMLRPC) están explicados en la tabla del principio de la [sección 6](#6-diseño-de-red-vlans-ips-y-diagrama).
 
@@ -500,6 +500,8 @@ La puerta de enlace de la WAN es 192.168.200.254 y la 192.168.202.87 queda de re
 
 *Figura 6.4.4.* Firewall: Rules de FW01: regla flotante TEMPORAL, reglas por defecto de la LAN y regla SYNC. Archivo: [`23-fw01-reglas-sync-clientes-dmz.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/17-11/04-firewalls/23-fw01-reglas-sync-clientes-dmz.jpg)
 
+**Por qué hace falta la regla SYNC.** OPNsense bloquea por defecto todo el tráfico que entra por una interfaz nueva, y la interfaz SYNC (VLAN 99) también. Sin una regla que lo permita, FW01 y FW02 no podrían intercambiar ni el estado de las conexiones (pfsync) ni la configuración (XMLRPC), y la alta disponibilidad no funcionaría. Por eso la regla se crea a mano en los dos firewalls: FW02 la necesita antes de la primera sincronización, porque el resto de reglas (como la TEMPORAL) le llegan desde FW01 precisamente por esa red. Ahora permite todo el tráfico entre los dos; la mejora prevista es limitarla a pfsync y HTTPS ([sección 16.3](#163-riesgos-y-mejoras-para-las-fases-2-y-3)).
+
 **Interfaces de FW02.** Las cinco interfaces con su IP real: WAN .202.85, LAN .40.3, CLIENTES .50.3, DMZ .100.3 y SYNC .99.2.
 
 ![Interfaces: Overview de FW02 con WAN, LAN, CLIENTES, DMZ y SYNC configuradas](img/fase1/17-11/04-firewalls/26-fw02-interfaces-configuradas.jpg)
@@ -520,17 +522,23 @@ La puerta de enlace de la WAN es 192.168.200.254 y la 192.168.202.87 queda de re
 
 *Figura 6.4.6.* System: High Availability: Settings en FW01: estados por SYNC, pfsync y XMLRPC hacia 192.168.99.2, usuario root y todos los servicios seleccionados. Archivo: [`28-fw01-ha-ajustes.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/28-fw01-ha-ajustes.jpg)
 
+Para comprobar que la sincronización funciona, en *System: High Availability: Status* FW01 tiene que poder leer los datos de FW02. Si los muestra, la conexión por XMLRPC está bien. Desde esa misma página se lanza *Synchronize and reconfigure all*, que copia la configuración de FW01 a FW02 (la primera vez no se lanzó bien, P23).
+
+![High Availability Status de FW01 con las versiones de FW02 y la lista de servicios sincronizados](img/fase1/19-11/04-firewalls/29-fw01-ha-conectado-con-fw02.jpg)
+
+*Figura 6.4.7.* System: High Availability: Status en FW01: arriba, las versiones de FW02 (firmware, base y kernel 26.7), que FW01 consigue leer por XMLRPC; debajo, los servicios que se sincronizan y el botón *Synchronize and reconfigure all*. Archivo: [`29-fw01-ha-conectado-con-fw02.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/29-fw01-ha-conectado-con-fw02.jpg)
+
 **NAT de salida.** Firewall → NAT → Source NAT en modo híbrido, con el alias `REDES_INTERNAS` (VLAN 40, 50 y 100) traducido a la VIP `192.168.202.86`. Así, si cae FW01, las conexiones salen por FW02 con la misma IP del aula.
 
 ![Source NAT híbrido de FW01 con REDES\_INTERNAS traducido a 192.168.202.86](img/fase1/19-11/04-firewalls/32-fw01-nat-salida-vip.jpg)
 
-*Figura 6.4.7.* Firewall: NAT: Source NAT en modo Hybrid: regla en la WAN que traduce `REDES_INTERNAS` a la VIP 192.168.202.86. Archivo: [`32-fw01-nat-salida-vip.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/32-fw01-nat-salida-vip.jpg)
+*Figura 6.4.8.* Firewall: NAT: Source NAT en modo Hybrid: regla en la WAN que traduce `REDES_INTERNAS` a la VIP 192.168.202.86. Archivo: [`32-fw01-nat-salida-vip.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/32-fw01-nat-salida-vip.jpg)
 
 **Corte de red.** Está descrito paso a paso en la [sección 6.3](#63-configuración-en-proxmox).
 
 ![Rutas de proxmoxAB tras el corte y pings correctos a las VLAN 40 y 100](img/fase1/19-11/04-firewalls/35-proxmox-tras-corte-rutas-y-pings-ok.jpg)
 
-*Figura 6.4.8.* proxmoxAB tras el corte: rutas a 192.168.50.0/24 y 192.168.100.0/24 por la 192.168.40.1 y ping correcto a .40.1, .40.2, .40.3, Ansible, CMK, WEB01 y DB01. Archivo: [`35-proxmox-tras-corte-rutas-y-pings-ok.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/35-proxmox-tras-corte-rutas-y-pings-ok.jpg)
+*Figura 6.4.9.* proxmoxAB tras el corte: rutas a 192.168.50.0/24 y 192.168.100.0/24 por la 192.168.40.1 y ping correcto a .40.1, .40.2, .40.3, Ansible, CMK, WEB01 y DB01. Archivo: [`35-proxmox-tras-corte-rutas-y-pings-ok.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/35-proxmox-tras-corte-rutas-y-pings-ok.jpg)
 
 | Prueba | Resultado |
 | --- | --- |
@@ -541,21 +549,19 @@ La puerta de enlace de la WAN es 192.168.200.254 y la 192.168.202.87 queda de re
 
 ![FW02 con las cuatro VIP en BACKUP antes del failover](img/fase1/19-11/04-firewalls/34-fw02-todas-vip-backup.jpg)
 
-*Figura 6.4.9.* Virtual IPs: Status en FW02 antes de la prueba: las cuatro VIP (VHID 7, 40, 50 y 100) en BACKUP. Archivo: [`34-fw02-todas-vip-backup.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/34-fw02-todas-vip-backup.jpg)
+*Figura 6.4.10.* Virtual IPs: Status en FW02 antes de la prueba: las cuatro VIP (VHID 7, 40, 50 y 100) en BACKUP. Archivo: [`34-fw02-todas-vip-backup.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/34-fw02-todas-vip-backup.jpg)
 
 ![Ping continuo desde la VM Ansible sin cortes mientras se apaga FW01](img/fase1/19-11/04-firewalls/37-failover-ping-sin-cortes-fw01-apagado.jpg)
 
-*Figura 6.4.10.* Ping continuo a 8.8.8.8 desde la VM Ansible mientras se apaga FW01: las respuestas siguen sin saltos en `icmp_seq`. Archivo: [`37-failover-ping-sin-cortes-fw01-apagado.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/37-failover-ping-sin-cortes-fw01-apagado.jpg)
+*Figura 6.4.11.* Ping continuo a 8.8.8.8 desde la VM Ansible mientras se apaga FW01: las respuestas siguen sin saltos en `icmp_seq`. Archivo: [`37-failover-ping-sin-cortes-fw01-apagado.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/37-failover-ping-sin-cortes-fw01-apagado.jpg)
 
 ![FW02 con las cuatro VIP en MASTER durante el failover](img/fase1/19-11/04-firewalls/38-failover-fw02-master.jpg)
 
-*Figura 6.4.11.* Virtual IPs: Status en FW02 con FW01 apagado: las cuatro VIP pasan a MASTER. Archivo: [`38-failover-fw02-master.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/38-failover-fw02-master.jpg)
-
-Del failback no hay captura propia: el fichero `39-failback-fw01-recupera-master.jpg` es idéntico a la figura 6.4.9 (pendiente de repetir la captura).
+*Figura 6.4.12.* Virtual IPs: Status en FW02 con FW01 apagado: las cuatro VIP pasan a MASTER. Archivo: [`38-failover-fw02-master.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/38-failover-fw02-master.jpg)
 
 ![FW01 como MASTER de la VIP de la WAN 192.168.202.86 con VHID 7](img/fase1/19-11/04-firewalls/30-fw01-carp-wan-master.jpg)
 
-*Figura 6.4.12.* Virtual IPs: Status en FW01 en el estado normal: la VIP de la WAN 192.168.202.86 con VHID 7 en MASTER. Es el estado al que vuelve tras el failback (captura tomada antes de la prueba). Archivo: [`30-fw01-carp-wan-master.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/30-fw01-carp-wan-master.jpg)
+*Figura 6.4.13.* Virtual IPs: Status en FW01 en el estado normal: la VIP de la WAN 192.168.202.86 con VHID 7 en MASTER. Es el estado normal, antes de la prueba; todavía falta una captura del failback (FW01 recuperando el MASTER al volver a encenderse). Archivo: [`30-fw01-carp-wan-master.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/30-fw01-carp-wan-master.jpg)
 
 **Lo que falta**: el relay DHCP de la VLAN 50 con un cliente de prueba y, en la Fase 3, reglas restrictivas en lugar de la TEMPORAL ([sección 16.2](#162-pendientes-para-la-próxima-sesión)).
 
@@ -1104,7 +1110,8 @@ Documentos que el enunciado pide como entregables propios (todos pendientes, sal
 - [ ] Después del corte, actualizar el diagrama de red con FW01, FW02 y las VLAN 50 y 99.
 - [ ] Valorar si añadir FW01 y FW02 a Checkmk.
 - [ ] Anotar en D9 por qué se montaron los firewalls el 17/11 en lugar de DC02.
-- [ ] Subir a GitHub, en una rama aparte, las capturas del 17/11 y del 19/11, el mapa de decisiones actualizado y la documentación.
+- [x] Subir a GitHub, en una rama aparte, las capturas del 17/11 y del 19/11, el mapa de decisiones actualizado y la documentación.
+- [ ] Repetir el failback (encender FW01 después de la prueba) y capturar *Virtual IPs: Status* en FW01 con las cuatro VIP en MASTER y en FW02 otra vez en BACKUP. La captura 39 del 19/11 se borró porque era idéntica a la 34.
 - [ ] Preparar FILES01, FILES02 y BACKUP con qm guest exec (drivers, IP fija .30, .31 y .50, nombre, WinRM y snapshot) y unirlos al dominio con ad-04-unir-servidores.yml.
 - [ ] Hacer commit de los playbooks cambiados el 19/11 en la VM Ansible (inventario, cibernova-dominio.yml, proxmox-vms-windows.yml y group\_vars/dhcp.yml), comprobando antes que el vault está cifrado.
 - [ ] Confirmar quién hizo cada tarea del 19/11 para completar la bitácora (B19).
