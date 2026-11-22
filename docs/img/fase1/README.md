@@ -162,8 +162,6 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | `38-failover-fw02-master.jpg` | FW02 durante el failover, con FW01 apagado: sus cuatro VIP han pasado de BACKUP a **MASTER**. Ahora FW02 hace de puerta de enlace y de NAT para todas las redes. Junto con la captura 37, demuestra que la alta disponibilidad funciona |
 | `39-ansible-inventario-proxmox-40-4.png` | Ajustes en Ansible después del corte, para que pueda seguir gestionando Proxmox. Antes, Ansible se conectaba a Proxmox por la `192.168.40.1`, pero esa IP ahora es la VIP de los firewalls: sin el cambio, Ansible intentaría entrar por SSH en un firewall. Por eso el inventario apunta a la nueva IP de Proxmox, la `192.168.40.4`. Además, en el playbook general `cibernova-dominio.yml` se comenta (se desactiva) el paso 7, `proxmox-vlan50-relay.yml`, que preparaba la VLAN 50 en Proxmox: ya no hace falta, porque esa red la dan los firewalls |
 
-Falta una captura del *failback* (volver a encender FW01 y comprobar que recupera las VIP en MASTER). La captura que había para eso era idéntica a la 34 y se eliminó; la 39 actual es la de Ansible, que antes era la 40.
-
 ### `05-dc02/` — Preparación, promoción y réplica de DC02
 
 **De qué trata:** añadir un segundo controlador de dominio para que AD y DNS no dependan solo de DC01. Se instalaron los drivers VirtIO, se configuraron la IP `192.168.40.11`, el DNS y WinRM, y se comprobó que su SID de máquina es distinto del de DC01. Después se promovió a controlador de dominio y se verificó que los dos DC se replican sin errores.
