@@ -151,17 +151,17 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | --- | --- |
 | `28-fw01-ha-ajustes.jpg` | Configuración de la alta disponibilidad en FW01 (*System: High Availability: Settings*). Se le dice que copie a FW02 (`192.168.99.2`), por la interfaz SYNC, dos cosas: el estado de las conexiones abiertas (pfsync), para que no se corten si FW01 cae, y la configuración (XMLRPC), con el usuario `root` y todos los servicios marcados. La contraseña no aparece en la captura |
 | `29-fw01-ha-conectado-con-fw02.jpg` | Comprobación de que FW01 se comunica con FW02 (*High Availability: Status*). FW01 consigue leer las versiones de FW02 (firmware, base y kernel 26.7), así que la conexión por XMLRPC funciona. Desde aquí se pulsa *Synchronize and reconfigure all* para copiar la configuración de FW01 a FW02 |
-| `30-fw01-carp-wan-master.jpg` | *Virtual IPs: Status* en FW01: la VIP de la WAN `192.168.202.86` con **VHID 7** (freq. 1/0) en **MASTER** |
-| `31-fw02-carp-wan-backup.jpg` | La misma VIP en FW02, con VHID 7 (freq. 1/100) en **BACKUP** |
-| `32-fw01-nat-salida-vip.jpg` | *Firewall: NAT: Source NAT* en modo **Hybrid**: regla en la WAN con origen `REDES_INTERNAS` traducido a `192.168.202.86` |
-| `33-proxmox-corte-vmbr1-40-a-punto-4.jpg` | Consola de proxmoxAB al aplicar el corte: avisos `post-down` de las reglas MASQUERADE ya borradas (P24), `vmbr1.40` con **192.168.40.4/24** y `POSTROUTING` sin reglas |
-| `34-fw02-todas-vip-backup.jpg` | *Virtual IPs: Status* en FW02: las cuatro VIP (WAN VHID 7, LAN 40, CLIENTES 50 y DMZ 100) en **BACKUP** |
-| `35-proxmox-tras-corte-rutas-y-pings-ok.jpg` | Rutas de proxmoxAB tras el corte (`192.168.50.0/24` y `192.168.100.0/24` vía `192.168.40.1`) y ping **OK** a .40.1, .40.2, .40.3, .40.5, .40.20, .100.30 y .40.40 |
-| `36-ansible-internet-por-firewall-ok.jpg` | Consola de la VM Ansible (192.168.40.5): `ping 8.8.8.8` sin pérdidas, ya por los firewalls |
-| `37-failover-ping-sin-cortes-fw01-apagado.jpg` | El mismo ping continuo mientras se apaga FW01: las respuestas siguen seguidas, sin saltos en `icmp_seq` |
-| `38-failover-fw02-master.jpg` | *Virtual IPs: Status* en FW02 durante el failover: las cuatro VIP en **MASTER** |
-| `39-failback-fw01-recupera-master.jpg` | Pensada para el failback, pero el fichero es **idéntico** a la captura 34 (FW02 con las cuatro VIP en BACKUP). Falta una captura propia del failback, como los anuncios CARP con `tcpdump` en `vmbr1.40` que se usaron para comprobarlo |
-| `40-ansible-inventario-proxmox-40-4.png` | VM Ansible: `cibernova-dominio.yml` con el paso 7 (`proxmox-vlan50-relay.yml`) comentado como obsoleto y conexión a proxmoxAB por `192.168.40.4` |
+| `30-fw01-carp-wan-master.jpg` | Estado de la VIP de la WAN en FW01 (*Virtual IPs: Status*): `192.168.202.86` con **VHID 7** en **MASTER**, es decir, ahora mismo la tiene FW01. *freq. 1/0* son los dos valores de CARP: anuncia cada 1 segundo y con prioridad 0 (*advskew*), la más alta. Por eso FW01 es el que manda mientras esté encendido |
+| `31-fw02-carp-wan-backup.jpg` | La misma VIP vista en FW02: VHID 7 en **BACKUP**, esperando por si FW01 cae. Su *freq. 1/100* indica que anuncia con prioridad 100, peor que la 0 de FW01, así que solo se queda la VIP si deja de oír a FW01. Las capturas 30 y 31 juntas demuestran que la pareja CARP funciona |
+| `32-fw01-nat-salida-vip.jpg` | NAT de salida de FW01 (*Firewall: NAT: Source NAT*) en modo **Hybrid**: OPNsense mantiene sus reglas automáticas y además acepta reglas manuales. La regla manual cambia la IP de origen de todo lo que sale de las redes internas (alias `REDES_INTERNAS`: VLAN 40, 50 y 100) por la VIP `192.168.202.86`. Así, aunque salga por FW02 tras un fallo, la IP pública sigue siendo la misma |
+| `33-proxmox-corte-vmbr1-40-a-punto-4.jpg` | El momento del corte en la consola de proxmoxAB: Proxmox deja de ser el router. `vmbr1.40` pasa a la **192.168.40.4** (la .1 queda libre para la VIP de los firewalls) y la tabla `POSTROUTING` sale vacía, sin las reglas MASQUERADE, así que Proxmox ya no hace NAT. Los avisos `post-down` salen porque esas reglas ya se habían borrado (P24) y no afectan |
+| `34-fw02-todas-vip-backup.jpg` | Estado normal de FW02 antes de la prueba de failover: sus cuatro VIP (WAN con VHID 7, LAN 40, CLIENTES 50 y DMZ 100) están en **BACKUP**. Esto confirma que FW01 lleva todas las puertas de enlace y que FW02 está preparado para relevarlo |
+| `35-proxmox-tras-corte-rutas-y-pings-ok.jpg` | Comprobación después del corte. Las rutas de proxmoxAB mandan las VLAN 50 y 100 a través de los firewalls (`via 192.168.40.1`). Los pings responden a la VIP (.40.1), a FW01 (.40.2), a FW02 (.40.3), a Ansible (.40.5), a CMK (.40.20), a WEB01 (.100.30) y a DB01 (.40.40): la red sigue funcionando con el nuevo router |
+| `36-ansible-internet-por-firewall-ok.jpg` | Prueba de salida a Internet desde la VM Ansible (192.168.40.5) con `ping 8.8.8.8` sin pérdidas. Ahora el tráfico ya no pasa por Proxmox, sino por la VIP `192.168.40.1` de los firewalls y su NAT. Este mismo ping se deja en marcha para la prueba de failover de la captura 37 |
+| `37-failover-ping-sin-cortes-fw01-apagado.jpg` | **Prueba de failover**: se apaga FW01 mientras sigue el ping de la captura 36. `icmp_seq` es el número de cada ping; si se perdiera alguno, habría un salto en la numeración. No hay ninguno, así que FW02 tomó el relevo sin cortar la conexión, gracias a CARP (la VIP) y a pfsync (las conexiones abiertas) |
+| `38-failover-fw02-master.jpg` | FW02 durante el failover, con FW01 apagado: sus cuatro VIP han pasado de BACKUP a **MASTER**. Ahora FW02 hace de puerta de enlace y de NAT para todas las redes. Junto con la captura 37, demuestra que la alta disponibilidad funciona |
+| `39-failback-fw01-recupera-master.jpg` | Tenía que mostrar el *failback*, es decir, que al volver a encender FW01 este recupera las VIP en MASTER y FW02 vuelve a BACKUP. Pero el fichero es **idéntico** a la captura 34 (FW02 en BACKUP, antes de la prueba). El failback sí se comprobó con `tcpdump` en `vmbr1.40`, viendo los anuncios CARP, pero falta repetir la captura |
+| `40-ansible-inventario-proxmox-40-4.png` | Cambios en la VM Ansible tras el corte. El inventario conecta ahora con proxmoxAB por la `192.168.40.4`: la .40.1 es la VIP de los firewalls y con ella Ansible entraría en un firewall. En `cibernova-dominio.yml`, el paso 7 (`proxmox-vlan50-relay.yml`) queda comentado como obsoleto porque la VLAN 50 ya la gestionan los firewalls |
 
 ### `05-dc02/` — Preparación, promoción y réplica de DC02
 
@@ -169,11 +169,11 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 | Fichero | Qué se ve |
 | --- | --- |
-| `01-dc02-instalador-guest-tools.jpg` | Consola de la VM 101 (DC02): `virtio-win-guest-tools` en el CD E: (`virtio-win-0.1.302`) y la bienvenida del instalador |
-| `02-dc02-guest-tools-instaladas.jpg` | Fin del instalador en DC02: *Installation Successfully* |
-| `03-dc02-ip-dns-winrm-por-agente.png` | Salida de `qm guest exec` en proxmoxAB: IP `192.168.40.11` manual, `Test-NetConnection` a DC01 correcto, registro SRV que devuelve `dc01.cibernova.local` en el puerto 389 y servicio WinRM en marcha y automático |
-| `04-dc02-renombrado-sid-distinto.png` | SID de máquina de DC01 (`S-1-5-21-3903391704-…`) y de DC02 (`S-1-5-21-654049888-…`): son distintos |
-| `05-dc02-replicacion-ok.jpg` | `repadmin /replsummary`: DC01 y DC02 con **0 errores de 5** en los dos sentidos; las 5 particiones replicadas correctamente; `SYSVOL` y `NETLOGON` publicados; el SRV devuelve `dc01` y `dc02` |
+| `01-dc02-instalador-guest-tools.jpg` | Primer paso con DC02 (VM 101): instalar los drivers VirtIO, igual que en DC01. Se ve el instalador `virtio-win-guest-tools`, que está en el CD E: (`virtio-win-0.1.302`). Sin estos drivers, Windows no reconoce la tarjeta de red de Proxmox |
+| `02-dc02-guest-tools-instaladas.jpg` | Fin de la instalación de los drivers en DC02 (*Installation Successfully*). A partir de aquí Windows ya ve la tarjeta de red y se le puede configurar la IP |
+| `03-dc02-ip-dns-winrm-por-agente.png` | Configuración de DC02 lanzada desde proxmoxAB con `qm guest exec`, que ejecuta órdenes dentro de la VM a través del agente QEMU sin abrir la consola. Resultados: IP fija `192.168.40.11`, conexión correcta con DC01, el DNS encuentra el controlador del dominio (registro SRV de `dc01.cibernova.local`, puerto 389) y WinRM en marcha y automático, listo para Ansible |
+| `04-dc02-renombrado-sid-distinto.png` | Comprobación del SID de máquina, el identificador único de cada Windows. DC01 (`S-1-5-21-3903391704-…`) y DC02 (`S-1-5-21-654049888-…`) tienen SID distintos. Es imprescindible antes de promover DC02: dos máquinas con el mismo SID dan errores en el dominio, como ya pasó con DC01 (P15) |
+| `05-dc02-replicacion-ok.jpg` | DC02 ya es controlador de dominio y se comprueba la réplica con `repadmin /replsummary`: **0 errores** en los dos sentidos y las 5 particiones de AD replicadas. Además están publicadas `SYSVOL` y `NETLOGON` (las carpetas compartidas que necesitan los DC) y el DNS devuelve `dc01` y `dc02`. El dominio ya no depende de un solo servidor |
 
 ### `06-dhcp01/` y `07-dhcp02/` — Drivers VirtIO
 
@@ -181,8 +181,8 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 | Fichero | Qué se ve |
 | --- | --- |
-| `06-dhcp01/01-dhcp01-guest-tools-instaladas.jpg` | Consola de la VM 102 (DHCP01): *Installation Successfully* del instalador de guest tools, con el CD `virtio-win-0.1.302` en D: |
-| `07-dhcp02/01-dhcp02-guest-tools-instaladas.jpg` | Lo mismo en la VM 104 (DHCP02), con el CD en E: |
+| `06-dhcp01/01-dhcp01-guest-tools-instaladas.jpg` | Drivers VirtIO instalados en DHCP01 (VM 102), con el CD `virtio-win-0.1.302` en D:. Es el mismo paso que en DC01 y DC02 y hace falta para que Windows vea la tarjeta de red antes de configurarle la IP y unirlo al dominio |
+| `07-dhcp02/01-dhcp02-guest-tools-instaladas.jpg` | Lo mismo en DHCP02 (VM 104), con el CD en E:. Con los dos servidores DHCP ya con red, se pueden unir al dominio y montar el failover (subcarpeta `08`) |
 
 ### `08-ad-estructura-dhcp/` — OUs, unión al dominio y DHCP
 
@@ -190,9 +190,9 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 | Fichero | Qué se ve |
 | --- | --- |
-| `01-ad03-ous-directiva.png` | `ad-03-estructura.yml` en `cn-dc01`: OUs de primer nivel e hijas, directiva de contraseñas y bloqueo, `redircmp` a `OU=Puestos` y `PLAY RECAP` con `ok=5 changed=5 failed=0` |
-| `02-ad04-dhcp-unidas-dominio.png` | `ad-04-unir-servidores.yml`: DNS a DC01 y DC02, unión al dominio en `OU=Servidores`, canal seguro correcto y resultado `DHCP01 -> cibernova.local` y `DHCP02 -> cibernova.local`, con `failed=0` |
-| `03-dhcp-ambito-failover-ok.png` | `dhcp-01-failover.yml`: autorización en AD, ámbito y opciones creados y failover `CN-DHCP01-DHCP02` en modo **LoadBalance 50 %**, socio `dhcp02.cibernova.local` y estado **Normal**; `PLAY RECAP` sin fallos |
+| `01-ad03-ous-directiva.png` | Playbook `ad-03-estructura.yml` ejecutado en DC01: crea las unidades organizativas (OU), las carpetas de AD donde se ordenan usuarios, grupos y equipos, y la directiva de contraseñas y bloqueo de cuentas. Con `redircmp`, los equipos nuevos van a `OU=Puestos` en lugar del contenedor por defecto. `ok=5 changed=5 failed=0`: todo creado sin errores |
+| `02-ad04-dhcp-unidas-dominio.png` | Playbook `ad-04-unir-servidores.yml`: pone como DNS de DHCP01 y DHCP02 a DC01 y DC02 y los une al dominio en `OU=Servidores`. Después comprueba el canal seguro, la relación de confianza entre cada servidor y el dominio. Resultado: `DHCP01 -> cibernova.local` y `DHCP02 -> cibernova.local`, con `failed=0` |
+| `03-dhcp-ambito-failover-ok.png` | Playbook `dhcp-01-failover.yml`. Autoriza los dos servidores en AD (un DHCP no autorizado no reparte IPs en un dominio) y crea el ámbito de la VLAN 50 con sus opciones. Después configura el failover `CN-DHCP01-DHCP02` en **LoadBalance 50 %**: cada servidor reparte la mitad de las IPs y, si uno cae, el otro atiende a todos. Estado **Normal**: los dos se ven y están sincronizados |
 
 ### `09-redimensionado/` — RAM y CPU
 
@@ -200,4 +200,4 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 
 | Fichero | Qué se ve |
 | --- | --- |
-| `01-proxmox-recursos-vms-tras-cambio.png` | Núcleos, memoria y tipo de CPU de cada VM después del cambio (FILES01, FILES02 y BACKUP apagadas) y memoria del host: 125 GB en total, 43 GB usados |
+| `01-proxmox-recursos-vms-tras-cambio.png` | Resultado del redimensionado: núcleos, memoria y tipo de CPU de cada VM después de ajustarlos a lo que necesita su servicio, y la memoria del servidor (125 GB en total, 43 GB en uso en ese momento). FILES01, FILES02 y BACKUP estaban apagadas. El reparto final es de 36 vCPU y 78 GB asignados de 128 GB |
