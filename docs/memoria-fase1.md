@@ -14,10 +14,12 @@
 5. [Diseño: decisiones tecnológicas](#5-diseño-decisiones-tecnológicas)
 6. [Diseño de red: VLANs, IPs y diagrama](#6-diseño-de-red-vlans-ips-y-diagrama)
    - [6.1 Redes](#61-redes)
-   - [6.2 Plan de direccionamiento (VLAN 40)](#62-plan-de-direccionamiento)
+   - [6.2 Plan de direccionamiento](#62-plan-de-direccionamiento)
    - [6.3 Configuración en Proxmox](#63-configuración-en-proxmox)
+   - [6.4 Firewalls OPNsense en alta disponibilidad (17/11)](#64-firewalls-opnsense-en-alta-disponibilidad-1711)
 7. [Hipervisor Proxmox: guía de instalación reproducible](#7-hipervisor-proxmox-guía-de-instalación-reproducible)
 8. [Inventario de máquinas y servicios](#8-inventario-de-máquinas-y-servicios)
+   - [8.1 Redimensionado de RAM y CPU (19/11)](#81-redimensionado-de-ram-y-cpu-1911)
 9. [Automatización con Ansible](#9-automatización-con-ansible)
    - [9.1 Plantilla cloud-init (VM 9000)](#91-plantilla-cloud-init-vm-9000)
    - [9.2 Proyecto y control de acceso](#92-proyecto-y-control-de-acceso)
@@ -28,6 +30,7 @@
 11. [Servicios](#11-servicios)
     - [11.1 Instalación de Windows Server 2025](#111-instalación-de-windows-server-2025-en-curso)
     - [11.2 Preparación de DC01 y creación del dominio (16/11)](#112-preparación-de-dc01-y-creación-del-dominio-1611)
+    - [11.3 DC02, estructura de AD y DHCP con failover (19/11)](#113-dc02-estructura-de-ad-y-dhcp-con-failover-1911)
 12. [Problemas encontrados y soluciones](#12-problemas-encontrados-y-soluciones)
 13. [Redundancia y puntos únicos de fallo](#13-redundancia-y-puntos-únicos-de-fallo)
 14. [Plan para lo que queda de trimestre](#14-plan-para-lo-que-queda-de-trimestre)
@@ -694,7 +697,7 @@ Commit del playbook que crea las VMs Windows (12/11):
 
 ![VM Ansible: cibernova-dominio.yml con el relay de Proxmox comentado y conexión a proxmoxAB por la 192.168.40.4](img/fase1/19-11/04-firewalls/39-ansible-inventario-proxmox-40-4.png)
 
-*Figura 9.3.1.* VM Ansible el 19/11: `cibernova-dominio.yml` con el paso 7 (`proxmox-vlan50-relay.yml`) comentado como obsoleto, y conexión a proxmoxAB por la 192.168.40.4 (`vmbr1.40` con 192.168.40.4/24). Desde el 19/11 la .40.1 es la VIP de los firewalls, así que con la IP antigua Ansible intentaría entrar por SSH en un firewall. Archivo: [`39-ansible-inventario-proxmox-40-4.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/39-ansible-inventario-proxmox-40-4.png)
+*Figura 9.3.1.* VM Ansible el 19/11: `cibernova-dominio.yml` con el paso 7 (`proxmox-vlan50-relay.yml`) comentado como obsoleto, y conexión a proxmoxAB por la 192.168.40.4 (`vmbr1.40` con 192.168.40.4/24). Desde el 19/11 la .40.1 es la VIP de los firewalls, así que con la IP antigua Ansible intentaría entrar por SSH en un firewall. Archivo: `[39-ansible-inventario-proxmox-40-4.png](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/39-ansible-inventario-proxmox-40-4.png)`
 
 ### 9.4 Playbooks
 
