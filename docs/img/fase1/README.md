@@ -14,7 +14,7 @@ fase1/
 ├── 17-11/
 │   └── 04-firewalls/           Instalación y configuración base de FW01 y FW02 (OPNsense)
 └── 19-11/
-    ├── 04-firewalls/           HA, VIP CARP, NAT, corte de red de Proxmox y failover (28 a 40)
+    ├── 04-firewalls/           HA, VIP CARP, NAT, corte de red de Proxmox y failover (28 a 39)
     ├── 05-dc02/                Preparación, promoción y réplica de DC02
     ├── 06-dhcp01/              Drivers VirtIO en DHCP01
     ├── 07-dhcp02/              Drivers VirtIO en DHCP02
@@ -160,9 +160,7 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | `36-ansible-internet-por-firewall-ok.jpg` | Prueba de salida a Internet desde la VM Ansible (192.168.40.5) con `ping 8.8.8.8` sin pérdidas. Ahora el tráfico ya no pasa por Proxmox, sino por la VIP `192.168.40.1` de los firewalls y su NAT. Este mismo ping se deja en marcha para la prueba de failover de la captura 37 |
 | `37-failover-ping-sin-cortes-fw01-apagado.jpg` | **Prueba de failover**: se apaga FW01 mientras sigue el ping de la captura 36. `icmp_seq` es el número de cada ping; si se perdiera alguno, habría un salto en la numeración. No hay ninguno, así que FW02 tomó el relevo sin cortar la conexión, gracias a CARP (la VIP) y a pfsync (las conexiones abiertas) |
 | `38-failover-fw02-master.jpg` | FW02 durante el failover, con FW01 apagado: sus cuatro VIP han pasado de BACKUP a **MASTER**. Ahora FW02 hace de puerta de enlace y de NAT para todas las redes. Junto con la captura 37, demuestra que la alta disponibilidad funciona |
-| `40-ansible-inventario-proxmox-40-4.png` | Cambios en la VM Ansible tras el corte. El inventario conecta ahora con proxmoxAB por la `192.168.40.4`: la .40.1 es la VIP de los firewalls y con ella Ansible entraría en un firewall. En `cibernova-dominio.yml`, el paso 7 (`proxmox-vlan50-relay.yml`) queda comentado como obsoleto porque la VLAN 50 ya la gestionan los firewalls |
-
-No hay captura 39: la que había era idéntica a la 34 y se eliminó. Falta repetir el *failback* (volver a encender FW01 y comprobar que recupera las VIP en MASTER) y capturarlo.
+| `39-ansible-inventario-proxmox-40-4.png` | Ajustes en Ansible después del corte, para que pueda seguir gestionando Proxmox. Antes, Ansible se conectaba a Proxmox por la `192.168.40.1`, pero esa IP ahora es la VIP de los firewalls: sin el cambio, Ansible intentaría entrar por SSH en un firewall. Por eso el inventario apunta a la nueva IP de Proxmox, la `192.168.40.4`. Además, en el playbook general `cibernova-dominio.yml` se comenta (se desactiva) el paso 7, `proxmox-vlan50-relay.yml`, que preparaba la VLAN 50 en Proxmox: ya no hace falta, porque esa red la dan los firewalls |
 
 ### `05-dc02/` — Preparación, promoción y réplica de DC02
 

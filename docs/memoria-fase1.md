@@ -692,9 +692,9 @@ Commit del playbook que crea las VMs Windows (12/11):
 | miembros | dhcp + files + backup | Servidores que se unen al dominio sin ser DC |
 | windows | dc + miembros | Las 7 Windows, por WinRM con la cuenta Administrador (group\_vars/windows.yml) |
 
-![VM Ansible: cibernova-dominio.yml con el relay de Proxmox comentado y conexión a proxmoxAB por la 192.168.40.4](img/fase1/19-11/04-firewalls/40-ansible-inventario-proxmox-40-4.png)
+![VM Ansible: cibernova-dominio.yml con el relay de Proxmox comentado y conexión a proxmoxAB por la 192.168.40.4](img/fase1/19-11/04-firewalls/39-ansible-inventario-proxmox-40-4.png)
 
-*Figura 9.3.1.* VM Ansible el 19/11: `cibernova-dominio.yml` con el paso 7 (`proxmox-vlan50-relay.yml`) comentado como obsoleto, y conexión a proxmoxAB por la 192.168.40.4 (`vmbr1.40` con 192.168.40.4/24). Desde el 19/11 la .40.1 es la VIP de los firewalls, así que con la IP antigua Ansible intentaría entrar por SSH en un firewall. Archivo: [`40-ansible-inventario-proxmox-40-4.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/40-ansible-inventario-proxmox-40-4.png)
+*Figura 9.3.1.* VM Ansible el 19/11: `cibernova-dominio.yml` con el paso 7 (`proxmox-vlan50-relay.yml`) comentado como obsoleto, y conexión a proxmoxAB por la 192.168.40.4 (`vmbr1.40` con 192.168.40.4/24). Desde el 19/11 la .40.1 es la VIP de los firewalls, así que con la IP antigua Ansible intentaría entrar por SSH en un firewall. Archivo: [`39-ansible-inventario-proxmox-40-4.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/04-firewalls/39-ansible-inventario-proxmox-40-4.png)
 
 ### 9.4 Playbooks
 
@@ -1111,7 +1111,7 @@ Documentos que el enunciado pide como entregables propios (todos pendientes, sal
 - [ ] Valorar si añadir FW01 y FW02 a Checkmk.
 - [ ] Anotar en D9 por qué se montaron los firewalls el 17/11 en lugar de DC02.
 - [x] Subir a GitHub, en una rama aparte, las capturas del 17/11 y del 19/11, el mapa de decisiones actualizado y la documentación.
-- [ ] Repetir el failback (encender FW01 después de la prueba) y capturar *Virtual IPs: Status* en FW01 con las cuatro VIP en MASTER y en FW02 otra vez en BACKUP. La captura 39 del 19/11 se borró porque era idéntica a la 34.
+- [ ] Repetir el failback (encender FW01 después de la prueba) y capturar *Virtual IPs: Status* en FW01 con las cuatro VIP en MASTER y en FW02 otra vez en BACKUP. La captura del failback que había se borró porque era idéntica a la 34.
 - [ ] Preparar FILES01, FILES02 y BACKUP con qm guest exec (drivers, IP fija .30, .31 y .50, nombre, WinRM y snapshot) y unirlos al dominio con ad-04-unir-servidores.yml.
 - [ ] Hacer commit de los playbooks cambiados el 19/11 en la VM Ansible (inventario, cibernova-dominio.yml, proxmox-vms-windows.yml y group\_vars/dhcp.yml), comprobando antes que el vault está cifrado.
 - [ ] Confirmar quién hizo cada tarea del 19/11 para completar la bitácora (B19).
