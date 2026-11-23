@@ -1,0 +1,107 @@
+# HISTÓRICO: versión de proxmox-vms-windows.yml anterior al redimensionado del 19/11.
+# Se conserva solo como referencia para la memoria. No ejecutar: la versión vigente es
+# ansible/playbooks/proxmox-vms-windows.yml.
+---
+# Recrea en proxmoxAB las VMs Windows desde cero, listas para instalar Windows Server 2025:
+# misma red en todas (virtio, vmbr1, firewall, VLAN 40), un solo disco VirtIO SCSI
+# primero en el arranque, ISO de WS2025 en ide2 y drivers virtio en ide3.
+# Las VMs creadas llevan la etiqueta "ws2025". Si ya la tienen, no se tocan (idempotente).
+- name: Crear VMs Windows Server 2025 en Proxmox
+  hosts: proxmox
+  gather_facts: false
+  vars:
+    storage: local-lvm
+    bridge: vmbr1
+    vlan_servidores: 40
+    iso_windows: WS2025_eval.iso
+    iso_virtio: virtio-win.iso
+    etiqueta: ws2025
+    windows_vms:
+      - { id: 100, nombre: DC01,    cores: 2, ram: 4096, disco: 60 }
+      - { id: 101, nombre: DC02,    cores: 2, ram: 4096, disco: 60 }
+      - { id: 102, nombre: DHCP01,    cores: 2, ram: 2048, disco: 40 }
+      - { id: 104, nombre: DHCP02,  cores: 2, ram: 2048, disco: 40 }
+      - { id: 108, nombre: FILES01, cores: 2, ram: 8192, disco: 60 }
+      - { id: 109, nombre: FILES02, cores: 2, ram: 8192, disco: 60 }
+      - { id: 110, nombre: BACKUP,  cores: 2, ram: 4096, disco: 60 }
+
+  tasks:
+    - name: Comprobar que las ISO están descargadas
+      ansible.builtin.stat:
+        path: "/var/lib/vz/template/iso/{{ item }}"
+      loop: ["{{ iso_windows }}", "{{ iso_virtio }}"]
+      register: isos
+
+    - name: Parar si falta alguna ISO (antes de borrar nada)
+      ansible.builtin.assert:
+        that: isos.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
+        fail_msg: "Falta {{ iso_windows }} o {{ iso_virtio }} en local:iso. No se ha borrado nada."
+
+    - name: Ver qué VMs existen ya
+      ansible.builtin.command: "qm config {{ item.id }}"
+      register: actual
+      changed_when: false
+      failed_when: false
+      loop: "{{ windows_vms }}"
+      loop_control:
+        label: "{{ item.nombre }}"
+
+    - name: Carpeta para la copia de la configuración antigua
+      ansible.builtin.file:
+        path: /root/qm-antes
+        state: directory
+
+    - name: Copia de la configuración antigua (para la documentación)
+      ansible.builtin.copy:
+        src: "/etc/pve/qemu-server/{{ r.item.id }}.conf"
+        dest: "/root/qm-antes/{{ r.item.id }}.conf"
+        remote_src: true
+        force: false
+      loop: "{{ actual.results }}"
+      loop_control:
+        loop_var: r
+        label: "{{ r.item.nombre }}"
+      when: r.rc == 0
+
+    - name: Borrar las VMs antiguas (solo las que no creó este playbook)
+      ansible.builtin.shell: >-
+        qm stop {{ r.item.id }} --skiplock 1 || true;
+        qm destroy {{ r.item.id }} --purge 1 --destroy-unreferenced-disks 1
+      loop: "{{ actual.results }}"
+      loop_control:
+        loop_var: r
+        label: "{{ r.item.nombre }}"
+      when:
+        - r.rc == 0
+        - "('tags: ' ~ etiqueta) not in r.stdout"
+
+    - name: Crear las VMs nuevas
+      ansible.builtin.command: >-
+        qm create {{ r.item.id }}
+        --name {{ r.item.nombre }}
+        --ostype win11
+        --sockets 1 --cores {{ r.item.cores }} --cpu host
+        --memory {{ r.item.ram }}
+        --scsihw virtio-scsi-single
+        --scsi0 {{ storage }}:{{ r.item.disco }},iothread=1,discard=on
+        --ide2 local:iso/{{ iso_windows }},media=cdrom
+        --ide3 local:iso/{{ iso_virtio }},media=cdrom
+        --net0 virtio,bridge={{ bridge }},firewall=1,tag={{ vlan_servidores }}
+        --boot order=scsi0;ide2;net0
+        --agent enabled=1
+        --tags {{ etiqueta }}
+        --description "Windows Server 2025 - creada con Ansible"
+      loop: "{{ actual.results }}"
+      loop_control:
+        loop_var: r
+        label: "{{ r.item.nombre }}"
+      when: "not (r.rc == 0 and ('tags: ' ~ etiqueta) in r.stdout)"
+
+    - name: Estado final
+      ansible.builtin.command: qm list
+      register: lista
+      changed_when: false
+
+    - name: Mostrar qm list
+      ansible.builtin.debug:
+        var: lista.stdout_lines
