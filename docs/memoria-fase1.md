@@ -906,23 +906,49 @@ El 19/11 DC02 quedó como segundo controlador de dominio, se creó la estructura
 
 **3. DHCP01 y DHCP02.** Mismo método que DC02. En DHCP01 hubo que cambiar el CD de la VM, que tenía la ISO de Windows, por `virtio-win.iso`. IPs .12 y .13, puerta de enlace .40.1, DNS DC01 y DC02, perfil privado y WinRM. Sus SID son distintos entre sí y del dominio. Nombres DHCP01 y DHCP02 y snapshots `pre-dominio`.
 
-**4. Estructura de AD, unión al dominio y DHCP con Ansible.** `ansible-playbook playbooks/ad-03-estructura.yml playbooks/ad-04-unir-servidores.yml playbooks/dhcp-01-failover.yml -l 'cn-dc01,dhcp' --ask-vault-pass`, limitado para no tocar FILES01, FILES02 y BACKUP, que estaban apagadas.
+**4. Estructura de AD, unión al dominio y DHCP con Ansible.**
 
-- **ad-03** (DC01, `ok=5 changed=5 failed=0`): OU raíz CiberNova con Usuarios, Cuentas\_Admin, Cuentas\_Servicio, Cuentas\_Especiales, Bajas, Grupos, Equipos y Servidores; OUs de los 10 departamentos, Grupos/Globales y DominioLocal y Equipos/Puestos y Recepcion; directiva de contraseñas y bloqueo; `redircmp` a OU=Puestos.
-- **ad-04** (`failed=0`): DHCP01 y DHCP02 en `OU=Servidores,OU=CiberNova`, con el canal seguro comprobado.
-- **dhcp-01-failover** (`failed=0`): rol DHCP, autorización en AD, ámbito VLAN50-Clientes (192.168.50.0/24, de la .20 a la .250, concesión de 8 días, puerta de enlace .50.1, DNS DC01 y DC02 y dominio) y failover CN-DHCP01-DHCP02 en LoadBalance 50/50, estado Normal. La primera vez se cortó a mitad (P26) y se relanzó dentro de `tmux`.
+Desde la VM Ansible lanzamos los tres playbooks de una vez. Con `-l` limitamos la ejecución a DC01 y a los DHCP, porque FILES01, FILES02 y BACKUP estaban apagadas:
+
+```bash
+ansible-playbook playbooks/ad-03-estructura.yml playbooks/ad-04-unir-servidores.yml playbooks/dhcp-01-failover.yml -l 'cn-dc01,dhcp' --ask-vault-pass
+```
+
+Los tres están en la tabla de playbooks de la [sección 9.4](#94-playbooks); aquí solo resumimos lo que hizo cada uno en esta ejecución:
+
+- **[ad-03-estructura.yml](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/ansible/playbooks/ad-03-estructura.yml)**, en DC01 (`ok=5 changed=5 failed=0`):
+    - Crea la OU raíz CiberNova con Usuarios, Cuentas\_Admin, Cuentas\_Servicio, Cuentas\_Especiales, Bajas, Grupos, Equipos y Servidores.
+    - Añade las OUs de los 10 departamentos, Grupos/Globales, Grupos/DominioLocal, Equipos/Puestos y Equipos/Recepcion.
+    - Aplica la directiva de contraseñas y bloqueo de cuenta.
+    - Con `redircmp`, los equipos nuevos que se unen al dominio entran directamente en OU=Puestos.
+- **[ad-04-unir-servidores.yml](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/ansible/playbooks/ad-04-unir-servidores.yml)** (`failed=0`):
+    - Coloca DHCP01 y DHCP02 en `OU=Servidores,OU=CiberNova`.
+    - Comprueba que su canal seguro con el dominio funciona.
+- **[dhcp-01-failover.yml](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/ansible/playbooks/dhcp-01-failover.yml)** (`failed=0`):
+    - Instala el rol DHCP y lo autoriza en AD.
+    - Crea el ámbito VLAN50-Clientes: red 192.168.50.0/24, reparte de la .20 a la .250, concesión de 8 días, puerta de enlace .50.1, DNS DC01 y DC02 y el dominio.
+    - Configura el failover CN-DHCP01-DHCP02 en LoadBalance 50/50, que queda en estado Normal.
+    - La primera vez se cortó a mitad (P26) y lo relanzamos dentro de `tmux`.
+
+![DHCP01 con el CD virtio-win montado y las guest tools instaladas](img/fase1/19-11/06-dhcp01/01-dhcp01-guest-tools-instaladas.jpg)
+
+*Figura 11.3.4.* DHCP01 con el CD de virtio-win montado y las guest tools instaladas. Archivo: [`01-dhcp01-guest-tools-instaladas.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/06-dhcp01/01-dhcp01-guest-tools-instaladas.jpg)
+
+![DHCP02 con el CD virtio-win montado y las guest tools instaladas](img/fase1/19-11/07-dhcp02/01-dhcp02-guest-tools-instaladas.jpg)
+
+*Figura 11.3.5.* Lo mismo en DHCP02. Archivo: [`01-dhcp02-guest-tools-instaladas.jpg`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/07-dhcp02/01-dhcp02-guest-tools-instaladas.jpg)
 
 ![ad-03-estructura.yml: OUs, directiva y redircmp en DC01](img/fase1/19-11/08-ad-estructura-dhcp/01-ad03-ous-directiva.png)
 
-*Figura 11.3.4.* `ad-03-estructura.yml` en cn-dc01: OUs de primer nivel e hijas, directiva de contraseñas y bloqueo, `redircmp` a OU=Puestos y `ok=5 changed=5 failed=0`. Archivo: [`01-ad03-ous-directiva.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/01-ad03-ous-directiva.png)
+*Figura 11.3.6.* Salida de [`ad-03-estructura.yml`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/ansible/playbooks/ad-03-estructura.yml) en DC01 (cn-dc01). Se ven las OUs creadas, la directiva de contraseñas y bloqueo aplicada y `redircmp` apuntando a OU=Puestos. Termina sin errores (`ok=5 changed=5 failed=0`). Archivo: [`01-ad03-ous-directiva.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/01-ad03-ous-directiva.png)
 
 ![ad-04-unir-servidores.yml: DHCP01 y DHCP02 unidos al dominio](img/fase1/19-11/08-ad-estructura-dhcp/02-ad04-dhcp-unidas-dominio.png)
 
-*Figura 11.3.5.* `ad-04-unir-servidores.yml`: DNS a DC01 y DC02, unión al dominio en OU=Servidores, canal seguro correcto y `failed=0`. Archivo: [`02-ad04-dhcp-unidas-dominio.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/02-ad04-dhcp-unidas-dominio.png)
+*Figura 11.3.7.* `ad-04-unir-servidores.yml`: DNS a DC01 y DC02, unión al dominio en OU=Servidores, canal seguro correcto y `failed=0`. Archivo: [`02-ad04-dhcp-unidas-dominio.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/02-ad04-dhcp-unidas-dominio.png)
 
 ![dhcp-01-failover.yml: ámbito y failover LoadBalance en estado Normal](img/fase1/19-11/08-ad-estructura-dhcp/03-dhcp-ambito-failover-ok.png)
 
-*Figura 11.3.6.* `dhcp-01-failover.yml`: autorización en AD, ámbito y opciones y failover CN-DHCP01-DHCP02 en LoadBalance 50 % con estado Normal. Archivo: [`03-dhcp-ambito-failover-ok.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/03-dhcp-ambito-failover-ok.png)
+*Figura 11.3.8.* `dhcp-01-failover.yml`: autorización en AD, ámbito y opciones y failover CN-DHCP01-DHCP02 en LoadBalance 50 % con estado Normal. Archivo: [`03-dhcp-ambito-failover-ok.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/19-11/08-ad-estructura-dhcp/03-dhcp-ambito-failover-ok.png)
 
 **Aislamiento respecto a la red del aula.** Antes de crear el ámbito se comprobó que este DHCP no puede repartir IPs en el aula:
 
