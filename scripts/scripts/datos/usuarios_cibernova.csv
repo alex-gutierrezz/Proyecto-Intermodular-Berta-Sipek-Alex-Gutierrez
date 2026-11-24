@@ -1,0 +1,90 @@
+﻿Nombre;Apellido1;Apellido2;Usuario;Departamento;Puesto;Sede;Responsable;GruposAdicionales;Perfil;CuotaPersonal;Observaciones
+Marta;Vidal;Serra;marta.vidal;Direccion;Directora general;Barcelona;Si;Responsables;Movil;2GB;
+Jordi;Puig;Ferrer;jordi.puig;Direccion;Director de operaciones;Barcelona;No;;Movil;2GB;
+Elena;Castro;Romero;elena.castro;Direccion;Directora técnica (CTO);Barcelona;No;Comite_Seguridad;Movil;2GB;
+Sergio;Navarro;Gil;sergio.navarro;Direccion;Asistente de dirección;Barcelona;No;;Movil;2GB;
+Rosa;Martínez;López;rosa.martinez;Administracion;Responsable de Administración y Finanzas;Barcelona;Si;Responsables;Local+Redireccion;2GB;
+Pablo;Ortega;Ruiz;pablo.ortega;Administracion;Contable;Barcelona;No;;Local+Redireccion;2GB;
+Nuria;Sala;Costa;nuria.sala;Administracion;Contable;Barcelona;No;;Local+Redireccion;2GB;
+Iván;Herrera;Molina;ivan.herrera;Administracion;Contable;Barcelona;No;;Local+Redireccion;2GB;
+Laura;Domínguez;Prieto;laura.dominguez;Administracion;Técnica de facturación;Barcelona;No;;Local+Redireccion;2GB;
+Óscar;Ramos;Vega;oscar.ramos;Administracion;Técnico de facturación;Barcelona;No;;Local+Redireccion;2GB;
+Cristina;Font;Pujol;cristina.font;Administracion;Tesorería;Barcelona;No;;Local+Redireccion;2GB;
+Begoña;Muñoz;Iglesias;begona.munoz;RRHH;Responsable de Recursos Humanos;Barcelona;Si;Responsables,RRHH_Nominas;Local+Redireccion;2GB;
+Alberto;Sanz;Delgado;alberto.sanz;RRHH;Técnico de selección;Barcelona;No;;Local+Redireccion;2GB;
+Irene;Moreno;Blanco;irene.moreno;RRHH;Técnica de selección;Barcelona;No;;Local+Redireccion;2GB;
+Tomás;Rubio;Marín;tomas.rubio;RRHH;Técnico de nóminas;Barcelona;No;RRHH_Nominas;Local+Redireccion;2GB;
+Ainhoa;Etxeberria;Goñi;ainhoa.etxeberria;RRHH;Técnica de formación;Barcelona;No;;Local+Redireccion;2GB;
+Raúl;Fernández;Soto;raul.fernandez;Comercial;Director comercial;Barcelona;Si;Responsables;Movil;2GB;
+Silvia;Roca;Mas;silvia.roca;Comercial;Comercial;Barcelona;No;;Movil;2GB;
+Adrián;Campos;Pastor;adrian.campos;Comercial;Comercial;Barcelona;No;;Movil;2GB;
+Lucía;Cabrera;Nieto;lucia.cabrera;Comercial;Comercial;Barcelona;No;;Movil;2GB;
+Marc;Soler;Vila;marc.soler;Comercial;Comercial;Barcelona;No;;Movil;2GB;
+Paula;Méndez;Cruz;paula.mendez;Comercial;Preventa;Barcelona;No;;Movil;2GB;
+Javier;Lozano;Peña;javier.lozano;Comercial;Coordinador comercial delegación;Madrid;No;;Movil;2GB;
+Carmen;Vázquez;Calvo;carmen.vazquez;Comercial;Comercial;Madrid;No;;Movil;2GB;
+Diego;Santos;Reyes;diego.santos;Comercial;Comercial;Madrid;No;;Movil;2GB;
+Amparo;Ferrer;Gimeno;amparo.ferrer;Comercial;Coordinadora comercial delegación;Valencia;No;;Movil;2GB;
+Vicente;Llorens;Sanchis;vicente.llorens;Comercial;Comercial;Valencia;No;;Movil;2GB;
+Andrea;Bosch;Mir;andrea.bosch;Comercial;Comercial;Valencia;No;;Movil;2GB;
+Clara;Giménez;Aguilar;clara.gimenez;Marketing;Responsable de Marketing;Barcelona;Si;Responsables;Local+Redireccion;2GB;
+Hugo;Pascual;Fuentes;hugo.pascual;Marketing;Diseñador gráfico;Barcelona;No;;Local+Redireccion;2GB;
+Noelia;Cortés;Benítez;noelia.cortes;Marketing;Community manager;Barcelona;No;;Local+Redireccion;2GB;
+Rubén;Medina;Herrero;ruben.medina;Marketing;Técnico de marketing digital;Barcelona;No;;Local+Redireccion;2GB;
+Alba;Riera;Camps;alba.riera;Marketing;Redactora de contenidos;Barcelona;No;;Local+Redireccion;2GB;
+Francisco;Morales;Ibáñez;francisco.morales;Consultoria;Responsable de Consultoría;Barcelona;Si;Responsables,Proyecto_Sanitario;Local+Redireccion;2GB;
+Mónica;Gallego;Crespo;monica.gallego;Consultoria;Consultora sénior;Barcelona;No;Proyecto_Sanitario;Local+Redireccion;2GB;
+Daniel;Carrasco;León;daniel.carrasco;Consultoria;Consultor sénior;Barcelona;No;Proyecto_Sanitario,Proyecto_Financiero;Local+Redireccion;2GB;
+Sara;Hidalgo;Vidal;sara.hidalgo;Consultoria;Consultora;Barcelona;No;Proyecto_Sanitario;Local+Redireccion;2GB;
+Albert;Casals;Roig;albert.casals;Consultoria;Consultor;Barcelona;No;Proyecto_Financiero;Local+Redireccion;2GB;
+Eva;Márquez;Santana;eva.marquez;Consultoria;Consultora;Barcelona;No;;Local+Redireccion;2GB;
+Ignacio;Pérez;Lorenzo;ignacio.perez;Consultoria;Consultor;Barcelona;No;;Local+Redireccion;2GB;
+Judit;Vives;Oliver;judit.vives;Consultoria;Consultora;Barcelona;No;;Local+Redireccion;2GB;
+Manuel;Guerrero;Parra;manuel.guerrero;Consultoria;Consultor júnior;Barcelona;No;;Local+Redireccion;2GB;
+Olga;Rovira;Prat;olga.rovira;Consultoria;Consultora júnior;Barcelona;No;;Local+Redireccion;2GB;
+Alejandro;Díaz;Moya;alejandro.diaz;Consultoria;Consultor sénior;Madrid;No;Proyecto_Financiero;Local+Redireccion;2GB;
+Beatriz;Rojas;Arias;beatriz.rojas;Consultoria;Consultora;Madrid;No;Proyecto_Financiero;Local+Redireccion;2GB;
+Carlos;Sánchez;Vicente;carlos.sanchez;Consultoria;Consultor;Madrid;No;Proyecto_Sanitario;Local+Redireccion;2GB;
+Patricia;Nieto;Durán;patricia.nieto;Consultoria;Consultora;Madrid;No;;Local+Redireccion;2GB;
+Gonzalo;Pardo;Esteban;gonzalo.pardo;Consultoria;Consultor júnior;Madrid;No;;Local+Redireccion;2GB;
+Rocío;Montero;Caballero;rocio.montero;Consultoria;Consultora júnior;Madrid;No;;Local+Redireccion;2GB;
+Pau;Martí;Ballester;pau.marti;Consultoria;Consultor sénior;Valencia;No;;Local+Redireccion;2GB;
+Inmaculada;Soriano;Mora;inmaculada.soriano;Consultoria;Consultora;Valencia;No;;Local+Redireccion;2GB;
+Enrique;Cano;Vicent;enrique.cano;Consultoria;Consultor;Valencia;No;;Local+Redireccion;2GB;
+Marina;Tormo;Alapont;marina.tormo;Consultoria;Consultora júnior;Valencia;No;;Local+Redireccion;2GB;
+David;García;López;david.garcia;Desarrollo;Responsable de Desarrollo;Barcelona;Si;Responsables;Local+Redireccion;5GB;
+David;García;Martín;david.garciam;Desarrollo;Desarrollador sénior;Barcelona;No;Proyecto_Sanitario;Local+Redireccion;5GB;Homónimo: aplicar regla de duplicados
+Natalia;Serrano;Rey;natalia.serrano;Desarrollo;Desarrolladora sénior;Barcelona;No;Proyecto_Sanitario;Local+Redireccion;5GB;
+Álvaro;Blanco;Cid;alvaro.blanco;Desarrollo;Desarrollador backend;Barcelona;No;;Local+Redireccion;5GB;
+Teresa;Molina;Ortiz;teresa.molina;Desarrollo;Desarrolladora frontend;Barcelona;No;;Local+Redireccion;5GB;
+Joan;Mestre;Pons;joan.mestre;Desarrollo;Desarrollador full-stack;Barcelona;No;;Local+Redireccion;5GB;
+Yolanda;Vera;Rico;yolanda.vera;Desarrollo;Analista QA;Barcelona;No;;Local+Redireccion;5GB;
+Samuel;Rivas;Luna;samuel.rivas;Desarrollo;Desarrollador backend;Barcelona;No;;Local+Redireccion;5GB;
+Miriam;Carmona;Bravo;miriam.carmona;Desarrollo;Desarrolladora frontend;Barcelona;No;;Local+Redireccion;5GB;
+Xavier;Planas;Codina;xavier.planas;Desarrollo;DevOps;Barcelona;No;;Local+Redireccion;5GB;
+Héctor;Mira;Belda;hector.mira;Desarrollo;Desarrollador sénior;Valencia;No;Proyecto_Financiero;Local+Redireccion;5GB;
+Lorena;Peris;Climent;lorena.peris;Desarrollo;Desarrolladora;Valencia;No;Proyecto_Financiero;Local+Redireccion;5GB;
+Borja;Esteve;Ferrando;borja.esteve;Desarrollo;Desarrollador;Valencia;No;;Local+Redireccion;5GB;
+Silvia;Roca;Martí;silvia.rocam;Desarrollo;Analista QA;Valencia;No;;Local+Redireccion;5GB;Homónimo de silvia.roca (Comercial): aplicar regla de duplicados
+Miguel;Torres;Aranda;miguel.torres;Sistemas;Responsable de Sistemas y Ciberseguridad;Barcelona;Si;Responsables,Comite_Seguridad;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Laia;Ribas;Coll;laia.ribas;Sistemas;Administradora de sistemas;Barcelona;No;;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Fernando;Lara;Quintana;fernando.lara;Sistemas;Administrador de sistemas;Barcelona;No;;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Ángel;Ibáñez;Rosales;angel.ibanez;Sistemas;Técnico de redes;Barcelona;No;;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Sofía;Bermúdez;Paredes;sofia.bermudez;Sistemas;Analista de ciberseguridad;Barcelona;No;;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Iñaki;Arrieta;Zubiri;inaki.arrieta;Sistemas;Analista de ciberseguridad;Barcelona;No;;Local+Redireccion;5GB;Tiene además cuenta administrativa adm.
+Jorge;Prieto;Salas;jorge.prieto;Soporte;Responsable de Soporte;Barcelona;Si;Responsables;Local+Redireccion;2GB;
+Marta;Vidal;Rey;marta.vidalr;Soporte;Técnica de soporte N2;Barcelona;No;;Local+Redireccion;2GB;Homónima de marta.vidal (Dirección): aplicar regla de duplicados
+Luis;Álvarez;Suárez;luis.alvarez;Soporte;Técnico de soporte N1;Barcelona;No;;Local+Redireccion;2GB;
+Ester;Guillén;Bonet;ester.guillen;Soporte;Técnica de soporte N1;Barcelona;No;;Local+Redireccion;2GB;
+Ricardo;Benito;Garrido;ricardo.benito;Soporte;Técnico de soporte N2;Barcelona;No;;Local+Redireccion;2GB;
+Pilar;Cuesta;Mateo;pilar.cuesta;Soporte;Coordinadora de soporte delegación;Madrid;No;;Local+Redireccion;2GB;
+Antonio;Rey;Trujillo;antonio.rey;Soporte;Técnico de soporte N1;Madrid;No;;Local+Redireccion;2GB;
+Verónica;Hernández;Sáez;veronica.hernandez;Soporte;Técnica de soporte N1;Madrid;No;;Local+Redireccion;2GB;
+Isabel;Montoya;Fuster;isabel.montoya;Legal;Responsable Legal y Cumplimiento (DPO);Barcelona;Si;Responsables,Comite_Seguridad;Local+Redireccion;2GB;
+Gabriel;Aguirre;Salvador;gabriel.aguirre;Legal;Abogado;Barcelona;No;;Local+Redireccion;2GB;
+Alicia;Ferrer;Camacho;alicia.ferrer;Legal;Abogada;Barcelona;No;;Local+Redireccion;2GB;
+Roberto;Vallejo;Tena;roberto.vallejo;Legal;Técnico de cumplimiento ISO 27001;Barcelona;No;Comite_Seguridad;Local+Redireccion;2GB;
+Nerea;Ruiz;Ortega;nerea.ruiz;Desarrollo;Becaria de desarrollo;Barcelona;No;Becarios;Local+Redireccion;500MB;Cuenta con caducidad y horario restringido
+Kevin;López;Santiago;kevin.lopez;Desarrollo;Becario de desarrollo;Barcelona;No;Becarios;Local+Redireccion;500MB;Cuenta con caducidad y horario restringido
+Aitana;Sempere;Gomis;aitana.sempere;Marketing;Becaria de marketing;Barcelona;No;Becarios;Local+Redireccion;500MB;Cuenta con caducidad y horario restringido
+Izan;Moreno;Checa;izan.moreno;Soporte;Becario de soporte;Madrid;No;Becarios;Local+Redireccion;500MB;Cuenta con caducidad y horario restringido
