@@ -1,0 +1,558 @@
+---
+# files-01-dfs.yml
+# Servidores de ficheros FILES01 y FILES02 (Anexo I, S4 del plan):
+#   1. Disco de datos de 100 GB en cada VM (Proxmox) -> unidad F: "DATOS"
+#   2. Roles: servidor de archivos, DFS-N, DFS-R, FSRM
+#   3. Estructura \\cibernova.local\empresa (Personales, Departamentos, Proyectos, Comun)
+#   4. Permisos NTFS por grupos DL_ (AGDLP) según scripts/datos/grupos-dl.csv
+#   5. Recurso Empresa$ con ABE, espacio de nombres DFS de dominio con ABE
+#   6. Replicación DFS-R FILES01 <-> FILES02 (FILES01 principal)
+#   7. Cuotas FSRM de las carpetas personales (2 GB / 5 GB / 500 MB, aviso al 90 %)
+#   8. Auditoría de Nominas, Expedientes y Proyectos\Sanitario (P-11, P-39, prueba 15)
+#
+# Requisitos:
+#   - FILES01 y FILES02 unidos al dominio (OU=Servidores).
+#   - Grupos G_ y DL_ creados por ad-05-usuarios.yml (si no existen, el play de permisos
+#     se para con un mensaje; se puede montar todo lo demás con -e permisos=false).
+#
+# Uso (dentro de tmux):
+#   ansible-playbook playbooks/files-01-dfs.yml --ask-vault-pass
+#   ansible-playbook playbooks/files-01-dfs.yml --ask-vault-pass -e permisos=false   # sin grupos aún
+#
+# Las unidades se llaman igual que en el Anexo I: no cambiar nombres de carpetas.
+
+# ---------------------------------------------------------------------------
+# 1. Disco de datos en Proxmox
+# ---------------------------------------------------------------------------
+- name: Disco de datos de FILES01 y FILES02 (Proxmox)
+  hosts: proxmox
+  gather_facts: false
+  vars:
+    vms_files: [108, 109]
+    tam_datos_gb: 100
+  tasks:
+    - name: Comprobar si ya tienen el segundo disco
+      ansible.builtin.command: qm config {{ item }}
+      register: cfg_files
+      changed_when: false
+      loop: "{{ vms_files }}"
+
+    - name: Añadir disco scsi1 de {{ tam_datos_gb }} GB (thin, en caliente)
+      ansible.builtin.command: >-
+        qm set {{ item.item }} --scsi1 local-lvm:{{ tam_datos_gb }},discard=on,iothread=1
+      when: "'scsi1:' not in item.stdout"
+      loop: "{{ cfg_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+# ---------------------------------------------------------------------------
+# 2. Preparación común de los dos servidores de ficheros
+# ---------------------------------------------------------------------------
+- name: Preparación de FILES01 y FILES02
+  hosts: files
+  gather_facts: false
+  vars:
+    letra_datos: F
+    raiz_datos: 'F:\Empresa'
+  tasks:
+    - name: Inicializar y formatear el disco de datos (solo si está sin usar)
+      ansible.windows.win_powershell:
+        script: |
+          Update-HostStorageCache
+          $Ansible.Changed = $false
+          if (Get-Volume -DriveLetter F -ErrorAction SilentlyContinue) { return 'F: ya existe' }
+          $d = Get-Disk | Where-Object { $_.PartitionStyle -eq 'RAW' -and $_.Size -ge 90GB -and $_.Size -le 110GB }
+          if (@($d).Count -ne 1) { throw "Se esperaba 1 disco RAW de ~100 GB y hay $(@($d).Count)" }
+          Initialize-Disk -Number $d.Number -PartitionStyle GPT
+          New-Partition -DiskNumber $d.Number -UseMaximumSize -DriveLetter F |
+            Format-Volume -FileSystem NTFS -NewFileSystemLabel 'DATOS' -AllocationUnitSize 4096 -Confirm:$false | Out-Null
+          $Ansible.Changed = $true
+          'Disco de datos preparado en F:'
+
+    - name: Roles de servidor de archivos, DFS y FSRM
+      ansible.windows.win_feature:
+        name:
+          - FS-FileServer
+          - FS-DFS-Namespace
+          - FS-DFS-Replication
+          - FS-Resource-Manager
+          - RSAT-DFS-Mgmt-Con
+          - RSAT-AD-PowerShell
+        include_management_tools: true
+        state: present
+      register: roles_files
+
+    - name: Reiniciar si los roles lo piden
+      ansible.windows.win_reboot:
+        reboot_timeout: 900
+      when: roles_files.reboot_required
+
+    - name: Carpeta raíz de datos
+      ansible.windows.win_file:
+        path: "{{ raiz_datos }}"
+        state: directory
+
+    - name: Carpeta de la raíz del espacio de nombres DFS
+      ansible.windows.win_file:
+        path: 'C:\DFSRoots\empresa'
+        state: directory
+
+    # El control fino va en NTFS; en el recurso, Usuarios autentificados con Cambiar
+    # y Administradores con Control total (diseño del Grupo 7). ABE activado.
+    - name: Recurso Empresa$ (datos) con ABE
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $s = Get-SmbShare -Name 'Empresa$' -ErrorAction SilentlyContinue
+          if (-not $s) {
+            $admins = ([Security.Principal.SecurityIdentifier]'S-1-5-32-544').Translate([Security.Principal.NTAccount]).Value
+            $autent = ([Security.Principal.SecurityIdentifier]'S-1-5-11').Translate([Security.Principal.NTAccount]).Value
+            New-SmbShare -Name 'Empresa$' -Path 'F:\Empresa' -FolderEnumerationMode AccessBased `
+              -CachingMode None -FullAccess $admins -ChangeAccess $autent `
+              -Description 'Datos de CiberNova (destino DFS)' | Out-Null
+            $Ansible.Changed = $true
+          } elseif ($s.FolderEnumerationMode -ne 'AccessBased') {
+            Set-SmbShare -Name 'Empresa$' -FolderEnumerationMode AccessBased -Force
+            $Ansible.Changed = $true
+          }
+
+    - name: Recurso de la raíz DFS (empresa)
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          if (-not (Get-SmbShare -Name 'empresa' -ErrorAction SilentlyContinue)) {
+            $admins = ([Security.Principal.SecurityIdentifier]'S-1-5-32-544').Translate([Security.Principal.NTAccount]).Value
+            $todos  = ([Security.Principal.SecurityIdentifier]'S-1-1-0').Translate([Security.Principal.NTAccount]).Value
+            New-SmbShare -Name 'empresa' -Path 'C:\DFSRoots\empresa' -ReadAccess $todos `
+              -FullAccess $admins -Description 'Raíz DFS \\cibernova.local\empresa' | Out-Null
+            $Ansible.Changed = $true
+          }
+
+    # Subcategoría "Sistema de archivos" por GUID (el nombre cambia con el idioma)
+    - name: Auditoría del sistema de archivos (éxito y error)
+      ansible.windows.win_powershell:
+        script: |
+          $guid = '{0CCE921D-69AE-11D9-BED3-505054503030}'
+          $antes = (auditpol /get /subcategory:$guid /r | ConvertFrom-Csv).'Inclusion Setting'
+          auditpol /set /subcategory:$guid /success:enable /failure:enable | Out-Null
+          $despues = (auditpol /get /subcategory:$guid /r | ConvertFrom-Csv).'Inclusion Setting'
+          $Ansible.Changed = ($antes -ne $despues)
+          "Auditoría sistema de archivos: $despues"
+
+    - name: Plantillas de cuota FSRM (aviso al 90 %)
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $plantillas = @{ 'CN-Personal-2GB' = 2GB; 'CN-Personal-5GB' = 5GB; 'CN-Personal-500MB' = 500MB }
+          foreach ($n in $plantillas.Keys) {
+            if (Get-FsrmQuotaTemplate -Name $n -ErrorAction SilentlyContinue) { continue }
+            $accion = New-FsrmAction -Type Event -EventType Warning `
+              -Body 'Cuota al 90 % en [Quota Path] ([Source Io Owner]): [Quota Used MB] MB de [Quota Limit MB] MB.'
+            $umbral = New-FsrmQuotaThreshold -Percentage 90 -Action $accion
+            New-FsrmQuotaTemplate -Name $n -Size $plantillas[$n] -Threshold $umbral `
+              -Description 'Carpetas personales CiberNova (Anexo I)' | Out-Null
+            $Ansible.Changed = $true
+          }
+
+# ---------------------------------------------------------------------------
+# 3. Estructura, permisos NTFS y auditoría (solo FILES01; DFS-R lo copia a FILES02)
+# ---------------------------------------------------------------------------
+- name: Estructura de carpetas y permisos (FILES01)
+  hosts: cn-files01
+  gather_facts: false
+  become: true
+  vars:
+    permisos: true
+    raiz_datos: 'F:\Empresa'
+    netbios: "{{ ad_netbios }}"
+    # Carpetas del Anexo I (no cambiar nombres)
+    carpetas:
+      - Personales
+      - Departamentos
+      - Departamentos\Direccion
+      - Departamentos\Direccion\Estrategia
+      - Departamentos\Direccion\Comunicados
+      - Departamentos\Administracion
+      - Departamentos\Administracion\Facturacion
+      - Departamentos\Administracion\Presupuestos
+      - Departamentos\RRHH
+      - Departamentos\RRHH\Expedientes
+      - Departamentos\RRHH\Nominas
+      - Departamentos\RRHH\Seleccion
+      - Departamentos\RRHH\Buzon_Documentacion
+      - Departamentos\Comercial
+      - Departamentos\Comercial\Ofertas
+      - Departamentos\Marketing
+      - Departamentos\Marketing\Campanas
+      - Departamentos\Consultoria
+      - Departamentos\Desarrollo
+      - Departamentos\Desarrollo\Codigo
+      - Departamentos\Desarrollo\Releases
+      - Departamentos\Desarrollo\Becarios
+      - Departamentos\Sistemas
+      - Departamentos\Sistemas\Documentacion
+      - Departamentos\Sistemas\Software
+      - Departamentos\Soporte
+      - Departamentos\Soporte\Incidencias
+      - Departamentos\Soporte\Base_Conocimiento
+      - Departamentos\Legal
+      - Departamentos\Legal\Contratos
+      - Departamentos\Legal\Politicas
+      - Departamentos\Legal\Comite_Seguridad
+      - Proyectos
+      - Proyectos\Sanitario
+      - Proyectos\Financiero
+      - Comun
+      - Comun\Plantillas
+      - Comun\Intercambio
+      - Comun\Formacion
+      - Comun\Sedes
+      - Comun\Sedes\Barcelona
+      - Comun\Sedes\Madrid
+      - Comun\Sedes\Valencia
+    # Herencia cortada (diseño del Grupo 7)
+    sin_herencia:
+      - Departamentos\RRHH\Nominas
+      - Departamentos\Legal\Comite_Seguridad
+      - Comun\Intercambio
+    # Auditoría (P-11, P-39, prueba 15)
+    auditadas:
+      - Departamentos\RRHH\Nominas
+      - Departamentos\RRHH\Expedientes
+      - Proyectos\Sanitario
+    # Copia de scripts/datos/grupos-dl.csv (Carpeta;Nivel;Grupo DL).
+    # Si cambia la matriz, cambiar las dos cosas.
+    # Niveles: CT control total · M modificar · C consulta · L listar (solo esta carpeta)
+    #          D depósito (cada uno ve lo suyo) · I intercambio (no borra lo ajeno) · X denegar
+    permisos_dl: |
+      Departamentos;L;DL_Departamentos_L
+      Departamentos\Direccion;M;DL_Direccion_M
+      Departamentos\Direccion;L;DL_Direccion_L
+      Departamentos\Direccion\Estrategia;C;DL_Direccion_Estrategia_C
+      Departamentos\Direccion\Comunicados;C;DL_Direccion_Comunicados_C
+      Departamentos\Administracion;M;DL_Administracion_M
+      Departamentos\Administracion;C;DL_Administracion_C
+      Departamentos\Administracion;L;DL_Administracion_L
+      Departamentos\Administracion\Facturacion;C;DL_Administracion_Facturacion_C
+      Departamentos\Administracion\Presupuestos;M;DL_Administracion_Presupuestos_M
+      Departamentos\RRHH;M;DL_RRHH_M
+      Departamentos\RRHH;L;DL_RRHH_L
+      Departamentos\RRHH\Expedientes;C;DL_RRHH_Expedientes_C
+      Departamentos\RRHH\Nominas;M;DL_RRHH_Nominas_M
+      Departamentos\RRHH\Nominas;C;DL_RRHH_Nominas_C
+      Departamentos\RRHH\Seleccion;C;DL_RRHH_Seleccion_C
+      Departamentos\RRHH\Buzon_Documentacion;D;DL_RRHH_Buzon_Documentacion_D
+      Departamentos\Comercial;M;DL_Comercial_M
+      Departamentos\Comercial;C;DL_Comercial_C
+      Departamentos\Comercial;L;DL_Comercial_L
+      Departamentos\Comercial\Ofertas;C;DL_Comercial_Ofertas_C
+      Departamentos\Marketing;M;DL_Marketing_M
+      Departamentos\Marketing;C;DL_Marketing_C
+      Departamentos\Marketing;L;DL_Marketing_L
+      Departamentos\Marketing\Campanas;M;DL_Marketing_Campanas_M
+      Departamentos\Consultoria;M;DL_Consultoria_M
+      Departamentos\Consultoria;C;DL_Consultoria_C
+      Departamentos\Desarrollo;M;DL_Desarrollo_M
+      Departamentos\Desarrollo;L;DL_Desarrollo_L
+      Departamentos\Desarrollo\Codigo;C;DL_Desarrollo_Codigo_C
+      Departamentos\Desarrollo\Releases;C;DL_Desarrollo_Releases_C
+      Departamentos\Desarrollo\Becarios;M;DL_Desarrollo_Becarios_M
+      Departamentos\Sistemas;CT;DL_Sistemas_CT
+      Departamentos\Sistemas;L;DL_Sistemas_L
+      Departamentos\Sistemas\Documentacion;C;DL_Sistemas_Documentacion_C
+      Departamentos\Sistemas\Software;C;DL_Sistemas_Software_C
+      Departamentos\Soporte;M;DL_Soporte_M
+      Departamentos\Soporte;C;DL_Soporte_C
+      Departamentos\Soporte;L;DL_Soporte_L
+      Departamentos\Soporte\Incidencias;M;DL_Soporte_Incidencias_M
+      Departamentos\Soporte\Incidencias;C;DL_Soporte_Incidencias_C
+      Departamentos\Soporte\Base_Conocimiento;C;DL_Soporte_Base_Conocimiento_C
+      Departamentos\Legal;M;DL_Legal_M
+      Departamentos\Legal;L;DL_Legal_L
+      Departamentos\Legal\Contratos;C;DL_Legal_Contratos_C
+      Departamentos\Legal\Politicas;M;DL_Legal_Politicas_M
+      Departamentos\Legal\Politicas;C;DL_Legal_Politicas_C
+      Departamentos\Legal\Comite_Seguridad;M;DL_Legal_Comite_Seguridad_M
+      Departamentos\Legal\Comite_Seguridad;C;DL_Legal_Comite_Seguridad_C
+      Proyectos;L;DL_Proyectos_L
+      Proyectos;X;DL_Proyectos_Denegar
+      Proyectos\Sanitario;M;DL_Proyectos_Sanitario_M
+      Proyectos\Sanitario;C;DL_Proyectos_Sanitario_C
+      Proyectos\Financiero;M;DL_Proyectos_Financiero_M
+      Proyectos\Financiero;C;DL_Proyectos_Financiero_C
+      Comun;C;DL_Comun_C
+      Comun\Plantillas;M;DL_Comun_Plantillas_M
+      Comun\Intercambio;I;DL_Comun_Intercambio_I
+      Comun\Formacion;M;DL_Comun_Formacion_M
+      Comun\Sedes\Barcelona;M;DL_Comun_Sedes_Barcelona_M
+      Comun\Sedes\Madrid;M;DL_Comun_Sedes_Madrid_M
+      Comun\Sedes\Valencia;M;DL_Comun_Sedes_Valencia_M
+  tasks:
+    - name: Crear la estructura de carpetas
+      ansible.windows.win_file:
+        path: "{{ raiz_datos }}\\{{ item }}"
+        state: directory
+      loop: "{{ carpetas }}"
+
+    - name: Comprobar que existen los grupos DL_ y G_Adm_Sistemas
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$Netbios, [string]$Tabla)
+          $Ansible.Changed = $false
+          $grupos = @('G_Adm_Sistemas', 'G_Empleados') + ($Tabla -split "`n" | Where-Object { $_.Trim() } |
+                    ForEach-Object { ($_ -split ';')[2].Trim() }) | Sort-Object -Unique
+          $faltan = foreach ($g in $grupos) {
+            try { [void](New-Object Security.Principal.NTAccount("$Netbios\$g")).Translate([Security.Principal.SecurityIdentifier]) }
+            catch { $g }
+          }
+          if ($faltan) { throw "Faltan grupos en AD (lanzar antes ad-05-usuarios.yml): $($faltan -join ', ')" }
+          "Grupos comprobados: $($grupos.Count)"
+        parameters:
+          Netbios: "{{ netbios }}"
+          Tabla: "{{ permisos_dl }}"
+      when: permisos | bool
+
+    - name: Aplicar permisos NTFS (AGDLP) y auditoría
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$Raiz, [string]$Netbios, [string]$Tabla, [string[]]$Carpetas,
+                [string[]]$SinHerencia, [string[]]$Auditadas)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          function Sid([string]$n) { (New-Object Security.Principal.NTAccount($n)).Translate([Security.Principal.SecurityIdentifier]) }
+          $SYSTEM = New-Object Security.Principal.SecurityIdentifier 'S-1-5-18'
+          $ADMINS = New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+          $CREATOR = New-Object Security.Principal.SecurityIdentifier 'S-1-3-0'
+          $TODOS  = New-Object Security.Principal.SecurityIdentifier 'S-1-1-0'
+          $ADMSIS = Sid "$Netbios\G_Adm_Sistemas"
+          $EMPLEADOS = Sid "$Netbios\G_Empleados"
+          $R = [Security.AccessControl.FileSystemRights]
+          $CIOI = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+          $NADA = [Security.AccessControl.InheritanceFlags]::None
+          $PNONE = [Security.AccessControl.PropagationFlags]::None
+          $PIO = [Security.AccessControl.PropagationFlags]::InheritOnly
+          function Regla($sid, $derechos, $herencia, $prop, $tipo = 'Allow') {
+            New-Object Security.AccessControl.FileSystemAccessRule($sid, $derechos, $herencia, $prop, $tipo)
+          }
+          # Reglas por nivel (ver cabecera del playbook)
+          function Reglas-Nivel($sid, [string]$nivel) {
+            $leer = $R::ReadAndExecute
+            $crear = $R::ReadAndExecute -bor $R::CreateFiles -bor $R::CreateDirectories
+            switch ($nivel) {
+              'CT' { Regla $sid $R::FullControl $CIOI $PNONE }
+              'M'  { Regla $sid $R::Modify $CIOI $PNONE }
+              'C'  { Regla $sid $leer $CIOI $PNONE }
+              'L'  { Regla $sid $leer $NADA $PNONE }
+              'D'  { Regla $sid $crear $NADA $PNONE
+                     Regla $CREATOR $R::Modify $CIOI $PIO }
+              'I'  { Regla $sid $crear $NADA $PNONE
+                     Regla $sid $leer $CIOI $PIO
+                     Regla $CREATOR $R::Modify $CIOI $PIO }
+              'X'  { Regla $sid $R::FullControl $CIOI $PNONE 'Deny' }
+              default { throw "Nivel desconocido: $nivel" }
+            }
+          }
+          $filas = $Tabla -split "`n" | Where-Object { $_.Trim() } | ForEach-Object {
+            $p = $_.Trim() -split ';'; [pscustomobject]@{ Carpeta = $p[0]; Nivel = $p[1]; Grupo = $p[2] } }
+
+          # Base de las carpetas protegidas: SYSTEM, Administradores y G_Adm_Sistemas
+          function Base($acl) {
+            foreach ($s in @($SYSTEM, $ADMINS, $ADMSIS)) { $acl.AddAccessRule((Regla $s $R::FullControl $CIOI $PNONE)) }
+          }
+          $cambios = @()
+          $rutas = @('') + $Carpetas
+          foreach ($rel in $rutas) {
+            $ruta = if ($rel) { Join-Path $Raiz $rel } else { $Raiz }
+            $actual = Get-Acl -Path $ruta
+            $acl = New-Object Security.AccessControl.DirectorySecurity
+            $protegida = (-not $rel) -or ($SinHerencia -contains $rel)
+            $acl.SetAccessRuleProtection($protegida, $false)
+            if ($protegida) { Base $acl }
+            if ($rel -eq 'Personales') { $acl.AddAccessRule((Regla $EMPLEADOS $R::ReadAndExecute $NADA $PNONE)) }
+            foreach ($f in ($filas | Where-Object Carpeta -eq $rel)) {
+              foreach ($r in (Reglas-Nivel (Sid "$Netbios\$($f.Grupo)") $f.Nivel)) { $acl.AddAccessRule($r) }
+            }
+            # Auditoría: lectura, escritura, borrado y cambios de permisos, éxito y error
+            if ($Auditadas -contains $rel) {
+              $derechos = $R::ReadData -bor $R::WriteData -bor $R::AppendData -bor $R::Delete -bor $R::ChangePermissions
+              $acl.AddAuditRule((New-Object Security.AccessControl.FileSystemAuditRule($TODOS, $derechos, $CIOI, $PNONE, 'Success, Failure')))
+            }
+            # Comparar solo las reglas explícitas y la protección
+            $explicitas = { param($a) ($a.Access | Where-Object { -not $_.IsInherited } |
+                ForEach-Object { "$($_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]))|$([int]$_.FileSystemRights -band (-bnot [int]$R::Synchronize))|$($_.InheritanceFlags)|$($_.PropagationFlags)|$($_.AccessControlType)" } |
+                Sort-Object) -join ';' }
+            $quiero = (& $explicitas $acl) + "|P=$protegida"
+            $tengo  = (& $explicitas $actual) + "|P=$($actual.AreAccessRulesProtected)"
+            $auditActual = (Get-Acl -Path $ruta -Audit).GetAuditRules($true, $false, [Security.Principal.SecurityIdentifier]).Count
+            $necesitaAudit = ($Auditadas -contains $rel) -and ($auditActual -eq 0)
+            if ($quiero -ne $tengo -or $necesitaAudit) {
+              $acl.SetOwner($ADMINS)
+              Set-Acl -Path $ruta -AclObject $acl
+              $cambios += ($(if ($rel) { $rel } else { '(raíz)' }))
+            }
+          }
+          if ($cambios) { $Ansible.Changed = $true }
+          "Carpetas revisadas: $($rutas.Count) · con cambios: $($cambios.Count)"
+          $cambios
+        parameters:
+          Raiz: "{{ raiz_datos }}"
+          Netbios: "{{ netbios }}"
+          Tabla: "{{ permisos_dl }}"
+          Carpetas: "{{ carpetas }}"
+          SinHerencia: "{{ sin_herencia }}"
+          Auditadas: "{{ auditadas }}"
+      when: permisos | bool
+
+# ---------------------------------------------------------------------------
+# 4. Espacio de nombres DFS y replicación (desde FILES01, como administrador del dominio)
+# ---------------------------------------------------------------------------
+- name: DFS-N y DFS-R
+  hosts: cn-files01
+  gather_facts: false
+  become: true
+  vars:
+    dominio: "{{ ad_dominio }}"
+    espacio: "\\\\{{ ad_dominio }}\\empresa"
+    carpetas_dfs: [Personales, Departamentos, Proyectos, Comun]
+  tasks:
+    - name: Raíz de dominio \\cibernova.local\empresa con ABE (FILES01 y FILES02)
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$Espacio, [string]$Dominio)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $t1 = "\\FILES01.$Dominio\empresa"; $t2 = "\\FILES02.$Dominio\empresa"
+          if (-not (Get-DfsnRoot -Path $Espacio -ErrorAction SilentlyContinue)) {
+            New-DfsnRoot -Path $Espacio -TargetPath $t1 -Type DomainV2 -EnableAccessBasedEnumeration $true `
+              -Description 'Datos de CiberNova (Anexo I)' | Out-Null
+            $Ansible.Changed = $true
+          }
+          $objetivos = (Get-DfsnRootTarget -Path $Espacio).TargetPath
+          if ($objetivos -notcontains $t2) { New-DfsnRootTarget -Path $Espacio -TargetPath $t2 | Out-Null; $Ansible.Changed = $true }
+          if ((Get-DfsnRoot -Path $Espacio).Flags -notmatch 'AccessBased') {
+            Set-DfsnRoot -Path $Espacio -EnableAccessBasedEnumeration $true | Out-Null; $Ansible.Changed = $true
+          }
+        parameters:
+          Espacio: "{{ espacio }}"
+          Dominio: "{{ dominio }}"
+
+    # FILES01 primero y FILES02 de reserva: todos escriben en el mismo servidor y se
+    # evitan conflictos de DFS-R; si FILES01 cae, los clientes pasan a FILES02.
+    - name: Carpetas DFS con destino en FILES01 (preferente) y FILES02 (reserva)
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$Espacio, [string]$Dominio, [string[]]$Carpetas)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          foreach ($c in $Carpetas) {
+            $p = "$Espacio\$c"
+            $d1 = "\\FILES01.$Dominio\Empresa$\$c"; $d2 = "\\FILES02.$Dominio\Empresa$\$c"
+            if (-not (Get-DfsnFolder -Path $p -ErrorAction SilentlyContinue)) {
+              New-DfsnFolder -Path $p -TargetPath $d1 -EnableTargetFailback $true | Out-Null
+              $Ansible.Changed = $true
+            }
+            $dest = (Get-DfsnFolderTarget -Path $p).TargetPath
+            if ($dest -notcontains $d2) { New-DfsnFolderTarget -Path $p -TargetPath $d2 | Out-Null; $Ansible.Changed = $true }
+            Set-DfsnFolderTarget -Path $p -TargetPath $d1 -ReferralPriorityClass GlobalHigh | Out-Null
+            Set-DfsnFolderTarget -Path $p -TargetPath $d2 -ReferralPriorityClass GlobalLow | Out-Null
+          }
+        parameters:
+          Espacio: "{{ espacio }}"
+          Dominio: "{{ dominio }}"
+          Carpetas: "{{ carpetas_dfs }}"
+
+    - name: Grupo de replicación CN-Empresa (FILES01 principal -> FILES02)
+      ansible.windows.win_powershell:
+        script: |
+          param([string]$Dominio)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $rg = 'CN-Empresa'; $rf = 'Empresa'; $ruta = 'F:\Empresa'
+          if (-not (Get-DfsReplicationGroup -GroupName $rg -DomainName $Dominio -ErrorAction SilentlyContinue)) {
+            New-DfsReplicationGroup -GroupName $rg -DomainName $Dominio -Description 'Datos de CiberNova' | Out-Null
+            New-DfsReplicatedFolder -GroupName $rg -FolderName $rf -DomainName $Dominio | Out-Null
+            Add-DfsrMember -GroupName $rg -ComputerName FILES01, FILES02 -DomainName $Dominio | Out-Null
+            Add-DfsrConnection -GroupName $rg -SourceComputerName FILES01 -DestinationComputerName FILES02 -DomainName $Dominio | Out-Null
+            Set-DfsrMembership -GroupName $rg -FolderName $rf -ComputerName FILES01 -ContentPath $ruta -PrimaryMember $true -DomainName $Dominio -Force | Out-Null
+            Set-DfsrMembership -GroupName $rg -FolderName $rf -ComputerName FILES02 -ContentPath $ruta -DomainName $Dominio -Force | Out-Null
+            $Ansible.Changed = $true
+          }
+          Update-DfsrConfigurationFromAD -ComputerName FILES01, FILES02
+          Get-DfsrMembership -GroupName $rg -DomainName $Dominio | Select-Object ComputerName, ContentPath, PrimaryMember, Enabled | Format-Table | Out-String
+        parameters:
+          Dominio: "{{ dominio }}"
+
+# ---------------------------------------------------------------------------
+# 5. Cuotas de las carpetas personales (en los dos; FSRM no se replica)
+# ---------------------------------------------------------------------------
+- name: Cuotas FSRM de las carpetas personales
+  hosts: files
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Cuota automática de 2 GB en Personales
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          if (-not (Get-FsrmAutoQuota -Path 'F:\Empresa\Personales' -ErrorAction SilentlyContinue)) {
+            New-FsrmAutoQuota -Path 'F:\Empresa\Personales' -Template 'CN-Personal-2GB' | Out-Null
+            $Ansible.Changed = $true
+          }
+
+    # 5 GB Desarrollo y Sistemas, 500 MB becarios (Anexo I). Solo carpetas que ya existen.
+    - name: Cuotas especiales por grupo
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $especiales = [ordered]@{ 'G_Desarrollo' = 'CN-Personal-5GB'; 'G_Sistemas' = 'CN-Personal-5GB'; 'G_Becarios' = 'CN-Personal-500MB' }
+          $hechos = @()
+          foreach ($g in $especiales.Keys) {
+            $miembros = Get-ADGroupMember -Identity $g -Recursive -ErrorAction SilentlyContinue | Where-Object objectClass -eq 'user'
+            foreach ($u in $miembros) {
+              $ruta = "F:\Empresa\Personales\$($u.SamAccountName)"
+              if (-not (Test-Path $ruta)) { continue }
+              $q = Get-FsrmQuota -Path $ruta -ErrorAction SilentlyContinue
+              if ($q -and $q.Template -eq $especiales[$g]) { continue }
+              if ($q) { Set-FsrmQuota -Path $ruta -Template $especiales[$g] -MatchesTemplate | Out-Null }
+              else { New-FsrmQuota -Path $ruta -Template $especiales[$g] | Out-Null }
+              $hechos += "$($u.SamAccountName)=$($especiales[$g])"; $Ansible.Changed = $true
+            }
+          }
+          if ($hechos) { $hechos } else { 'Sin cambios (o aún no hay carpetas personales)' }
+
+# ---------------------------------------------------------------------------
+# 6. Comprobaciones
+# ---------------------------------------------------------------------------
+- name: Comprobaciones de ficheros
+  hosts: files
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Esperar a que DFS-R copie la estructura (hasta 10 min)
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            if (Test-Path 'F:\Empresa\Departamentos\RRHH\Nominas') { return 'Estructura presente' }
+            Start-Sleep -Seconds 10
+          }
+          throw 'La estructura no ha llegado por DFS-R en 10 minutos (revisar el registro "Replicación DFS")'
+
+    - name: Resumen
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          [pscustomobject]@{
+            Equipo       = $env:COMPUTERNAME
+            Disco_F      = '{0:N0} GB libres' -f ((Get-Volume F).SizeRemaining / 1GB)
+            Recursos     = (Get-SmbShare | Where-Object Name -in 'Empresa$', 'empresa' | ForEach-Object Name) -join ', '
+            ABE          = (Get-SmbShare -Name 'Empresa$').FolderEnumerationMode
+            Carpetas     = (Get-ChildItem 'F:\Empresa' -Directory -Recurse).Count
+            DFSR         = (Get-Service DFSR).Status
+            Espacio_DFS  = Test-Path '\\cibernova.local\empresa\Departamentos'
+          } | Format-List | Out-String
+      register: resumen
+
+    - name: Mostrar resumen
+      ansible.builtin.debug:
+        msg: "{{ resumen.output }}"

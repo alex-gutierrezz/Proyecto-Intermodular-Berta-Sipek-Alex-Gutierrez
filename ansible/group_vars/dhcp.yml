@@ -1,8 +1,8 @@
 ---
 # Ámbitos DHCP de CiberNova.
-# Red de clientes: VLAN 50, 192.168.50.0/24 (PROPUESTA, se decide el 17/11).
-#   .1 puerta de enlace (Proxmox) · .2–.19 IPs fijas · .20–.250 ámbito DHCP
-# Los clientes llegan al DHCP por el relay de Proxmox (en la empresa, el switch de
+# Red de clientes: VLAN 50, 192.168.50.0/24 (interfaz CLIENTES de OPNsense).
+#   .1 puerta de enlace (VIP CARP de OPNsense) · .2-.3 FW01/FW02 · .2–.19 IPs fijas · .20–.250 ámbito DHCP
+# Los clientes llegan al DHCP por el relay DHCP de OPNsense (en la empresa, el switch de
 # capa 3 con "ip helper-address"). Si se aprueban más VLAN de clientes, se añaden aquí.
 
 dhcp_failover_nombre: CN-DHCP01-DHCP02

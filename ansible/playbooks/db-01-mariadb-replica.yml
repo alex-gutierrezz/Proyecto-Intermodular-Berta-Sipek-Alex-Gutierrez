@@ -1,0 +1,184 @@
+---
+# db-01-mariadb-replica.yml
+# MariaDB en DB01 (principal) y DB02 (réplica) con replicación por GTID.
+#   - Datos en /var/lib/mysql (disco lv_mysql)
+#   - Base de datos "cibernova" y usuario de la web (desde la DMZ)
+#   - Usuario de replicación limitado a DB02
+#   - root de MariaDB solo por socket (sin contraseña de red)
+#
+# Requisitos en la VM Ansible:
+#   ansible-galaxy collection install community.mysql
+#
+# Uso:
+#   ansible-playbook playbooks/db-01-mariadb-replica.yml --ask-vault-pass
+#
+# Variables del vault (group_vars/all/vault.yml):
+#   vault_mariadb_repl_password
+#   vault_mariadb_web_password
+
+- name: Instalación y configuración de MariaDB
+  hosts: db
+  become: true
+  serial: 1
+  vars:
+    db_principal: cn-db01
+    server_ids:
+      cn-db01: 1
+      cn-db02: 2
+
+  pre_tasks:
+    - name: Comprobar que /var/lib/mysql es el disco de datos
+      ansible.builtin.command: findmnt -n -o SOURCE /var/lib/mysql
+      register: mnt_db
+      changed_when: false
+      failed_when: "'vg_db-lv_mysql' not in mnt_db.stdout"
+
+    - name: ¿MariaDB ya instalado?
+      ansible.builtin.stat:
+        path: /var/lib/mysql/mysql
+      register: datadir_mysql
+
+    # mkfs crea lost+found; MariaDB lo mostraría como una base de datos
+    - name: Quitar lost+found del datadir antes de la primera instalación
+      ansible.builtin.file:
+        path: /var/lib/mysql/lost+found
+        state: absent
+      when: not datadir_mysql.stat.exists
+
+  tasks:
+    - name: Instalar MariaDB y el conector de Python
+      ansible.builtin.apt:
+        name: [mariadb-server, python3-pymysql]
+        state: present
+        update_cache: true
+
+    - name: Configuración de CiberNova (red, binlog, GTID)
+      ansible.builtin.copy:
+        dest: /etc/mysql/mariadb.conf.d/60-cibernova.cnf
+        mode: "0644"
+        content: |
+          [mysqld]
+          bind-address             = 0.0.0.0
+          server_id                = {{ server_ids[inventory_hostname] }}
+          log_bin                  = /var/lib/mysql/mysql-bin
+          binlog_format            = ROW
+          expire_logs_days         = 7
+          log_slave_updates        = ON
+          gtid_strict_mode         = ON
+          character-set-server     = utf8mb4
+          collation-server         = utf8mb4_general_ci
+          {% if inventory_hostname != db_principal %}
+          read_only                = ON
+          relay_log                = /var/lib/mysql/relay-bin
+          {% endif %}
+      register: cnf
+
+    - name: Reiniciar MariaDB si cambia la configuración
+      ansible.builtin.service:
+        name: mariadb
+        state: restarted
+        enabled: true
+      when: cnf.changed
+
+- name: Base de datos y usuarios en el principal
+  hosts: cn-db01
+  become: true
+  tasks:
+    - name: Base de datos cibernova
+      community.mysql.mysql_db:
+        name: cibernova
+        state: present
+        encoding: utf8mb4
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Usuario de replicación (solo desde DB02)
+      community.mysql.mysql_user:
+        name: repl
+        host: 192.168.40.41
+        password: "{{ vault_mariadb_repl_password }}"
+        priv: "*.*:REPLICATION SLAVE"
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Usuario de la web (solo desde la DMZ)
+      community.mysql.mysql_user:
+        name: cibernova_web
+        host: 192.168.100.%
+        password: "{{ vault_mariadb_web_password }}"
+        priv: "cibernova.*:SELECT,INSERT,UPDATE,DELETE"
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Réplica en DB02
+  hosts: cn-db02
+  become: true
+  tasks:
+    - name: Estado actual de la réplica
+      community.mysql.mysql_replication:
+        mode: getreplica
+        login_unix_socket: /run/mysqld/mysqld.sock
+      register: estado_replica
+
+    - name: Configurar DB01 como principal (GTID)
+      community.mysql.mysql_replication:
+        mode: changeprimary
+        primary_host: 192.168.40.40
+        primary_user: repl
+        primary_password: "{{ vault_mariadb_repl_password }}"
+        primary_use_gtid: replica_pos
+        login_unix_socket: /run/mysqld/mysqld.sock
+      when: not (estado_replica.Is_Replica | default(false))
+
+    - name: Arrancar la réplica
+      community.mysql.mysql_replication:
+        mode: startreplica
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Esperar a que la réplica se ponga al día
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Comprobar la réplica
+      community.mysql.mysql_replication:
+        mode: getreplica
+        login_unix_socket: /run/mysqld/mysqld.sock
+      register: replica
+
+    - name: Resumen de la réplica
+      ansible.builtin.debug:
+        msg:
+          - "IO: {{ replica.Slave_IO_Running | default('?') }} / SQL: {{ replica.Slave_SQL_Running | default('?') }}"
+          - "Retraso: {{ replica.Seconds_Behind_Master | default('?') }} s"
+          - "Último error: {{ replica.Last_Error | default('') }}"
+      failed_when: (replica.Slave_IO_Running | default('No')) != 'Yes' or (replica.Slave_SQL_Running | default('No')) != 'Yes'
+
+- name: Prueba de replicación
+  hosts: db
+  become: true
+  tasks:
+    - name: Escribir una fila de prueba en DB01
+      community.mysql.mysql_query:
+        login_db: cibernova
+        login_unix_socket: /run/mysqld/mysqld.sock
+        query:
+          - CREATE TABLE IF NOT EXISTS prueba_replica (id INT AUTO_INCREMENT PRIMARY KEY, origen VARCHAR(20), fecha DATETIME DEFAULT CURRENT_TIMESTAMP)
+          - INSERT INTO prueba_replica (origen) VALUES ('cn-db01')
+      when: inventory_hostname == 'cn-db01'
+
+    - name: Esperar a que llegue a DB02
+      ansible.builtin.pause:
+        seconds: 5
+      when: inventory_hostname == 'cn-db02'
+
+    - name: Leer en DB02
+      community.mysql.mysql_query:
+        login_db: cibernova
+        login_unix_socket: /run/mysqld/mysqld.sock
+        query: SELECT COUNT(*) AS filas FROM prueba_replica
+      register: filas
+      when: inventory_hostname == 'cn-db02'
+
+    - name: Resultado
+      ansible.builtin.debug:
+        msg: "Filas replicadas en DB02: {{ filas.query_result[0][0].filas }}"
+      when: inventory_hostname == 'cn-db02'

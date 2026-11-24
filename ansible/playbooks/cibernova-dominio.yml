@@ -33,8 +33,9 @@
 - name: 6/8 DHCP01/DHCP02 con failover
   ansible.builtin.import_playbook: dhcp-01-failover.yml
 
-- name: 7/8 VLAN 50 de clientes y relay DHCP en Proxmox
-  ansible.builtin.import_playbook: proxmox-vlan50-relay.yml
+# - name: 7/8 VLAN 50 de clientes y relay DHCP en Proxmox
+  # OBSOLETO 19/11/2026: el relay DHCP de la VLAN 50 lo haran los firewalls OPNsense, no Proxmox
+  # ansible.builtin.import_playbook: proxmox-vlan50-relay.yml
 
 - name: 8/8 Comprobación final (AD, replicación, DNS y DHCP)
   ansible.builtin.import_playbook: ad-99-verificar.yml

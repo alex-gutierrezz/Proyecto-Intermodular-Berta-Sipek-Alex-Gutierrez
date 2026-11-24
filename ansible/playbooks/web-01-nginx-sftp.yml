@@ -1,0 +1,235 @@
+---
+# web-01-nginx-sftp.yml
+# Servicio web en la DMZ (WEB01 y WEB02):
+#   - Nginx sirviendo /var/www/cibernova (disco lv_www montado en /var/www)
+#   - Usuario de despliegue "deploy" solo por SFTP, enjaulado en /var/www
+#   - Sincronización WEB01 -> WEB02 con rsync cada 5 minutos
+#
+# Uso:
+#   ansible-playbook playbooks/web-01-nginx-sftp.yml --ask-vault-pass
+#
+# Variables del vault (group_vars/all/vault.yml):
+#   vault_sftp_deploy_password
+
+- name: Nginx y SFTP en los servidores web
+  hosts: web
+  become: true
+  vars:
+    web_base: /var/www
+    web_root: /var/www/cibernova
+    sftp_group: sftpusers
+    sftp_user: deploy
+
+  pre_tasks:
+    - name: Comprobar que /var/www es el disco de datos
+      ansible.builtin.command: findmnt -n -o SOURCE /var/www
+      register: mnt_www
+      changed_when: false
+      failed_when: "'vg_web-lv_www' not in mnt_www.stdout"
+
+  tasks:
+    - name: Instalar Nginx y rsync
+      ansible.builtin.apt:
+        name: [nginx, rsync]
+        state: present
+        update_cache: true
+
+    # ChrootDirectory exige que la jaula sea de root y no escribible por otros
+    - name: /var/www propiedad de root (requisito del chroot)
+      ansible.builtin.file:
+        path: "{{ web_base }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Grupo de usuarios SFTP
+      ansible.builtin.group:
+        name: "{{ sftp_group }}"
+        state: present
+
+    - name: Usuario de despliegue (sin shell)
+      ansible.builtin.user:
+        name: "{{ sftp_user }}"
+        groups: "{{ sftp_group }},www-data"
+        append: true
+        home: "{{ web_root }}"
+        create_home: false
+        shell: /usr/sbin/nologin
+        password: "{{ vault_sftp_deploy_password | password_hash('sha512', 'cibernovaweb') }}"
+        update_password: always
+
+    - name: Carpeta de la web
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: "{{ sftp_user }}"
+        group: www-data
+        mode: "2775"
+
+    - name: Página de prueba (indica qué servidor responde)
+      ansible.builtin.copy:
+        dest: "{{ web_root }}/index.html"
+        owner: "{{ sftp_user }}"
+        group: www-data
+        mode: "0664"
+        force: false
+        content: |
+          <!DOCTYPE html>
+          <html lang="es">
+          <head><meta charset="utf-8"><title>CiberNova Solutions</title></head>
+          <body>
+          <h1>CiberNova Solutions</h1>
+          <p>Servidor: {{ inventory_hostname }}</p>
+          </body>
+          </html>
+
+    - name: Sitio Nginx de CiberNova
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/cibernova
+        mode: "0644"
+        content: |
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              server_name _;
+              root {{ web_root }};
+              index index.html index.htm;
+              server_tokens off;
+              add_header X-Servidor {{ inventory_hostname }} always;
+              location / {
+                  try_files $uri $uri/ =404;
+              }
+              access_log /var/log/nginx/cibernova_access.log;
+              error_log  /var/log/nginx/cibernova_error.log;
+          }
+      notify: Recargar nginx
+
+    - name: Activar el sitio de CiberNova
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/cibernova
+        dest: /etc/nginx/sites-enabled/cibernova
+        state: link
+      notify: Recargar nginx
+
+    - name: Quitar el sitio por defecto
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Recargar nginx
+
+    - name: Nginx arrancado y habilitado
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    # El Match va en un fichero propio: sshd lo cierra al acabar el fichero
+    - name: SFTP enjaulado para el grupo sftpusers
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/60-sftp-cibernova.conf
+        mode: "0644"
+        content: |
+          Match Group {{ sftp_group }}
+              ChrootDirectory {{ web_base }}
+              ForceCommand internal-sftp -d /cibernova
+              PasswordAuthentication yes
+              AllowTcpForwarding no
+              X11Forwarding no
+              PermitTTY no
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reiniciar ssh
+
+    # Valida la configuración completa (sshd_config + sshd_config.d) antes de reiniciar
+    - name: Comprobar la configuración completa de sshd
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+
+    - name: Comprobar la configuración de Nginx
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    # Recarga siempre al final por si una ejecución anterior falló antes de los handlers
+    - name: Recargar Nginx con la configuración de CiberNova
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      changed_when: false
+
+  handlers:
+    - name: Recargar nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    - name: Reiniciar ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+- name: Sincronización del contenido WEB01 -> WEB02
+  hosts: web
+  become: true
+  vars:
+    web_origen: cn-web01
+    web_destino: cn-web02
+    ip_origen: 192.168.100.30
+    ip_destino: 192.168.100.31
+  tasks:
+    - name: Clave SSH de sincronización en WEB01
+      community.crypto.openssh_keypair:
+        path: /root/.ssh/id_sync_web
+        type: ed25519
+        comment: "sync-web {{ web_origen }}"
+      when: inventory_hostname == web_origen
+
+    - name: Leer la clave pública de WEB01
+      ansible.builtin.slurp:
+        src: /root/.ssh/id_sync_web.pub
+      register: clave_sync
+      when: inventory_hostname == web_origen
+
+    - name: Autorizar la clave en WEB02 (solo desde WEB01 y solo rsync)
+      ansible.posix.authorized_key:
+        user: root
+        key: "{{ hostvars[web_origen].clave_sync.content | b64decode }}"
+        key_options: 'from="{{ ip_origen }}",no-pty,no-agent-forwarding,no-port-forwarding,no-X11-forwarding'
+      when: inventory_hostname == web_destino
+
+    - name: Aceptar la clave de host de WEB02 en WEB01
+      ansible.builtin.shell: ssh-keyscan -t ed25519 {{ ip_destino }} >> /root/.ssh/known_hosts
+      args:
+        creates: /root/.ssh/.sync_known
+      when: inventory_hostname == web_origen
+
+    - name: Marcar known_hosts como preparado
+      ansible.builtin.file:
+        path: /root/.ssh/.sync_known
+        state: touch
+        modification_time: preserve
+        access_time: preserve
+      when: inventory_hostname == web_origen
+
+    - name: Cron de sincronización cada 5 minutos
+      ansible.builtin.cron:
+        name: "sync web cibernova a {{ web_destino }}"
+        minute: "*/5"
+        user: root
+        job: >-
+          rsync -a --delete -e "ssh -i /root/.ssh/id_sync_web -o BatchMode=yes"
+          /var/www/cibernova/ root@{{ ip_destino }}:/var/www/cibernova/
+          >> /var/log/sync-web.log 2>&1
+      when: inventory_hostname == web_origen
+
+- name: Comprobaciones
+  hosts: web
+  become: true
+  tasks:
+    - name: La web responde en local
+      ansible.builtin.uri:
+        url: http://127.0.0.1/
+        return_content: true
+      register: web_ok
+
+    - name: Resumen
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: HTTP {{ web_ok.status }} - cabecera X-Servidor={{ web_ok.x_servidor | default('?') }}"
