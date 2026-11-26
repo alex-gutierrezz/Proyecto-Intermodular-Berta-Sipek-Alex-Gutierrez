@@ -9,6 +9,8 @@
 #   ansible-playbook playbooks/ad-05-usuarios.yml --ask-vault-pass
 # Con carpetas personales (cuando FILES01 tenga el recurso, semana 4):
 #   ... -e ruta_personales='\\cibernova.local\empresa\Personales'
+# Con perfiles móviles (Dirección, Comercial) en el recurso Perfiles$ de ad-06-gpo.yml:
+#   ... -e ruta_perfiles='\\files01.cibernova.local\Perfiles$'
 #
 # Las contraseñas iniciales se quedan en DC01 (C:\CiberNova\credenciales, solo
 # Administradores); el playbook nunca las muestra.
@@ -43,15 +45,17 @@
           Script: "{{ destino }}\\alta-usuarios.ps1"
           Simular: "{{ simular | bool }}"
           RutaPersonales: "{{ ruta_personales | default('') }}"
+          RutaPerfiles: "{{ ruta_perfiles | default('') }}"
         script: |
-          param([string]$Script, [bool]$Simular, [string]$RutaPersonales)
+          param([string]$Script, [bool]$Simular, [string]$RutaPersonales, [string]$RutaPerfiles)
           $argumentos = @{ WhatIf = $Simular }
           if ($RutaPersonales) { $argumentos.RutaPersonales = $RutaPersonales }
+          if ($RutaPerfiles)   { $argumentos.RutaPerfiles   = $RutaPerfiles }
           $r = & $Script @argumentos
           $Ansible.Changed = (-not $r.Simulacion) -and ($r.Cambios -gt 0)
           $r
       # El doble salto (DC01 -> FILES01) solo hace falta para las carpetas personales
-      become: "{{ ruta_personales is defined }}"
+      become: "{{ ruta_personales is defined or ruta_perfiles is defined }}"
       register: alta
 
     - name: Resumen

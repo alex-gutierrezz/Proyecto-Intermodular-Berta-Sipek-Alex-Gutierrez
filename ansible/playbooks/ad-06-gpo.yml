@@ -1,0 +1,223 @@
+---
+# ad-06-gpo.yml
+# Perfiles y directivas de grupo (Anexo I, S4 del plan):
+#   1. Recurso Perfiles$ en FILES01 (F:\Perfiles, ABE, sin caché sin conexión):
+#        - perfiles móviles de Dirección y Comercial (<usuario>.V6, los crea Windows)
+#        - perfil obligatorio de recepcion.bcn (Obligatorio\recepcion.V6, NTUSER.MAN)
+#   2. GPO CN-U-Unidades     G: Departamentos, P: Proyectos (solo con acceso), S: Comun
+#   3. GPO CN-U-Redireccion  Documentos y Escritorio a la carpeta personal (perfil local)
+#   4. GPO CN-C-Puestos      esperar a la red al iniciar sesión, G_Adm_Sistemas
+#                            en Administradores locales
+#
+# La unidad H: y el ProfilePath de cada usuario los pone alta-usuarios.ps1:
+#   ansible-playbook playbooks/ad-05-usuarios.yml --ask-vault-pass \
+#     -e "ruta_personales='\\cibernova.local\empresa\Personales'" \
+#     -e "ruta_perfiles='\\files01.cibernova.local\Perfiles$'"
+#
+# Los perfiles van en FILES01 y fuera de la carpeta replicada por DFS-R: Microsoft no
+# admite perfiles móviles con varios destinos activos (la replicación puede pisar el
+# NTUSER.DAT de una sesión con el de otra). Si FILES01 cae, los usuarios de Dirección y
+# Comercial inician con perfil temporal; la redirección y las unidades siguen por DFS.
+#
+# Requisitos: files-01-dfs.yml (\\cibernova.local\empresa) y ad-05-usuarios.yml (grupos).
+#
+# Uso:
+#   ansible-playbook playbooks/ad-06-gpo.yml --ask-vault-pass -e simular=true
+#   ansible-playbook playbooks/ad-06-gpo.yml --ask-vault-pass
+
+- name: Recurso de perfiles en FILES01
+  hosts: cn-files01
+  gather_facts: false
+  vars:
+    simular: false
+    ruta_perfiles_local: 'F:\Perfiles'
+    recurso_perfiles: 'Perfiles$'
+    grupos_perfil_movil: [G_Direccion, G_Comercial]
+
+  tasks:
+    - name: Carpeta, permisos NTFS, recurso y perfil obligatorio
+      ansible.windows.win_powershell:
+        parameters:
+          Raiz: "{{ ruta_perfiles_local }}"
+          Recurso: "{{ recurso_perfiles }}"
+          Dominio: "{{ ad_netbios }}"
+          GruposMovil: "{{ grupos_perfil_movil }}"
+          Simular: "{{ simular | bool }}"
+        script: |
+          param([string]$Raiz, [string]$Recurso, [string]$Dominio, [string[]]$GruposMovil, [bool]$Simular)
+          $ErrorActionPreference = 'Stop'
+          $Ansible.Changed = $false
+          $hecho = [System.Collections.Generic.List[string]]::new()
+
+          function Get-Sid([string]$Cuenta) {
+              if ($Cuenta -like 'S-1-*') { return [Security.Principal.SecurityIdentifier]$Cuenta }
+              ([Security.Principal.NTAccount]"$Dominio\$Cuenta").Translate([Security.Principal.SecurityIdentifier])
+          }
+          $R = [Security.AccessControl.FileSystemRights]
+          $H = [Security.AccessControl.InheritanceFlags]
+          $P = [Security.AccessControl.PropagationFlags]
+          $TODO = $H::ContainerInherit -bor $H::ObjectInherit
+          function Regla($Sid, $Derechos, $Herencia, $Propagacion) {
+              [Security.AccessControl.FileSystemAccessRule]::new($Sid, $Derechos, $Herencia, $Propagacion, 'Allow')
+          }
+          # Compara solo las entradas (sin orden) para no reescribir ACL que ya están bien
+          function Get-Aces([string]$Sddl) { (([regex]::Matches($Sddl, '\([^)]+\)')).Value | Sort-Object) -join '' }
+          function Set-AclProtegida([string]$Ruta, [Security.AccessControl.FileSystemAccessRule[]]$Reglas) {
+              $nueva = [Security.AccessControl.DirectorySecurity]::new()
+              $nueva.SetAccessRuleProtection($true, $false)
+              foreach ($r in $Reglas) { $nueva.AddAccessRule($r) }
+              $actual = Get-Acl -LiteralPath $Ruta
+              $igual = $actual.AreAccessRulesProtected -and
+                  ((Get-Aces $actual.GetSecurityDescriptorSddlForm('Access')) -eq (Get-Aces $nueva.GetSecurityDescriptorSddlForm('Access')))
+              if ($igual) { return }
+              $hecho.Add("permisos de $Ruta")
+              if (-not $Simular) {
+                  $actual.SetAccessRuleProtection($true, $false)
+                  $actual.Access | ForEach-Object { [void]$actual.RemoveAccessRuleSpecific($_) }
+                  foreach ($r in $Reglas) { $actual.AddAccessRule($r) }
+                  Set-Acl -LiteralPath $Ruta -AclObject $actual
+              }
+          }
+
+          $sistema   = Get-Sid 'S-1-5-18'
+          $admins    = Get-Sid 'S-1-5-32-544'
+          $creador   = Get-Sid 'S-1-3-0'
+          $autentic  = Get-Sid 'S-1-5-11'
+          $admSis    = Get-Sid 'G_Adm_Sistemas'
+          $obligatorio = Join-Path $Raiz 'Obligatorio'
+          $recepcion   = Join-Path $obligatorio 'recepcion.V6'
+
+          foreach ($c in $Raiz, $obligatorio) {
+              if (-not (Test-Path -LiteralPath $c)) {
+                  $hecho.Add("carpeta $c")
+                  if (-not $Simular) { New-Item -ItemType Directory -Path $c | Out-Null }
+              }
+          }
+          if ($Simular -and -not (Test-Path -LiteralPath $Raiz)) {
+              [pscustomobject]@{ Simulacion = $true; Cambios = $hecho }
+              return
+          }
+
+          # Raíz: permisos recomendados por Microsoft para perfiles móviles. Los usuarios
+          # solo pueden crear su carpeta; dentro, CREADOR PROPIETARIO les da control total.
+          $listarCrear = $R::ListDirectory -bor $R::ReadAttributes -bor $R::ReadPermissions -bor
+                         $R::CreateDirectories -bor $R::Traverse -bor $R::Synchronize
+          $reglasRaiz = @(
+              (Regla $sistema $R::FullControl $TODO $P::None)
+              (Regla $admins  $R::FullControl $TODO $P::None)
+              (Regla $admSis  $R::FullControl $TODO $P::None)
+              (Regla $creador $R::FullControl $TODO $P::InheritOnly)
+          ) + @($GruposMovil | ForEach-Object { Regla (Get-Sid $_) $listarCrear $H::None $P::None })
+          Set-AclProtegida $Raiz $reglasRaiz
+
+          # Perfil obligatorio: solo lectura para cualquier usuario autenticado
+          Set-AclProtegida $obligatorio @(
+              (Regla $sistema  $R::FullControl     $TODO $P::None)
+              (Regla $admins   $R::FullControl     $TODO $P::None)
+              (Regla $admSis   $R::FullControl     $TODO $P::None)
+              (Regla $autentic $R::ReadAndExecute  $TODO $P::None)
+          )
+
+          # Perfil obligatorio a partir del perfil Default: NTUSER.DAT pasa a NTUSER.MAN
+          # (Windows no guarda los cambios al cerrar sesión) y la colmena del registro
+          # recibe Control total para Usuarios autentificados, como indica Microsoft.
+          if (-not (Test-Path -LiteralPath (Join-Path $recepcion 'NTUSER.MAN'))) {
+              $hecho.Add("perfil obligatorio $recepcion")
+              if (-not $Simular) {
+                  New-Item -ItemType Directory -Path $recepcion -Force | Out-Null
+                  robocopy.exe "$env:SystemDrive\Users\Default" $recepcion /E /XJ /COPY:DAT /R:1 /W:1 `
+                      /NFL /NDL /NJH /NJS /NP /XF 'NTUSER.DAT.LOG*' '*.blf' '*.regtrans-ms' | Out-Null
+                  if ($LASTEXITCODE -ge 8) { throw "robocopy terminó con código $LASTEXITCODE" }
+                  Rename-Item -LiteralPath (Join-Path $recepcion 'NTUSER.DAT') -NewName 'NTUSER.MAN'
+
+                  & reg.exe load 'HKU\CN_OBLIGATORIO' (Join-Path $recepcion 'NTUSER.MAN') | Out-Null
+                  if ($LASTEXITCODE -ne 0) { throw 'No se pudo cargar NTUSER.MAN' }
+                  try {
+                      $regla = [Security.AccessControl.RegistryAccessRule]::new(
+                          $autentic, 'FullControl', 'ContainerInherit', 'None', 'Allow')
+                      $derechos = [Security.AccessControl.RegistryRights]'ReadKey, ChangePermissions'
+                      function Set-PermisoClave($Clave, [bool]$EsRaiz) {
+                          $acl = $Clave.GetAccessControl()
+                          if ($EsRaiz -or $acl.AreAccessRulesProtected) {
+                              $acl.AddAccessRule($regla)
+                              $Clave.SetAccessControl($acl)
+                          }
+                          foreach ($n in $Clave.GetSubKeyNames()) {
+                              try {
+                                  $sub = $Clave.OpenSubKey($n, 'ReadWriteSubTree', $derechos)
+                                  Set-PermisoClave $sub $false
+                                  $sub.Close()
+                              } catch { }
+                          }
+                      }
+                      $raizReg = [Microsoft.Win32.Registry]::Users.OpenSubKey('CN_OBLIGATORIO', 'ReadWriteSubTree', $derechos)
+                      Set-PermisoClave $raizReg $true
+                      $raizReg.Close()
+                  } finally {
+                      [GC]::Collect()
+                      [GC]::WaitForPendingFinalizers()
+                      & reg.exe unload 'HKU\CN_OBLIGATORIO' | Out-Null
+                  }
+                  # reg load deja registros de transacciones junto a la colmena; sobran
+                  Get-ChildItem -LiteralPath $recepcion -Force -File |
+                      Where-Object { $_.Name -match '^NTUSER\.MAN.+' } | Remove-Item -Force
+              }
+          }
+
+          # Recurso oculto con ABE y sin Archivos sin conexión
+          $nombreAut = $autentic.Translate([Security.Principal.NTAccount]).Value
+          $nombreAdm = $admins.Translate([Security.Principal.NTAccount]).Value
+          $recursoActual = Get-SmbShare -Name $Recurso -ErrorAction SilentlyContinue
+          if (-not $recursoActual) {
+              $hecho.Add("recurso $Recurso")
+              if (-not $Simular) {
+                  New-SmbShare -Name $Recurso -Path $Raiz -FullAccess $nombreAut, $nombreAdm `
+                      -FolderEnumerationMode AccessBased -CachingMode None `
+                      -Description 'Perfiles moviles y obligatorios de CiberNova' | Out-Null
+              }
+          } elseif ($recursoActual.FolderEnumerationMode -ne 'AccessBased' -or $recursoActual.CachingMode -ne 'None') {
+              $hecho.Add("recurso $Recurso (ABE y caché)")
+              if (-not $Simular) {
+                  Set-SmbShare -Name $Recurso -FolderEnumerationMode AccessBased -CachingMode None -Force
+              }
+          }
+
+          $Ansible.Changed = (-not $Simular) -and ($hecho.Count -gt 0)
+          [pscustomobject]@{ Simulacion = $Simular; Cambios = $hecho }
+      register: perfiles
+
+    - name: Resumen de FILES01
+      ansible.builtin.debug:
+        msg: "{{ (perfiles.output | first).Cambios | default([]) or ['Sin cambios'] }}"
+
+
+- name: Directivas de grupo
+  hosts: cn-dc01
+  gather_facts: false
+  vars:
+    destino: 'C:\CiberNova\scripts'
+    simular: false
+
+  tasks:
+    - name: Copiar el script de GPO
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../scripts/gpo-cibernova.ps1"
+        dest: "{{ destino }}\\gpo-cibernova.ps1"
+
+    - name: Crear y vincular las GPO{{ ' (SIMULACIÓN)' if simular | bool else '' }}
+      ansible.windows.win_powershell:
+        parameters:
+          Script: "{{ destino }}\\gpo-cibernova.ps1"
+          Simular: "{{ simular | bool }}"
+        script: |
+          param([string]$Script, [bool]$Simular)
+          $r = & $Script -WhatIf:$Simular
+          $Ansible.Changed = (-not $r.Simulacion) -and ($r.Cambios -gt 0)
+          $r
+      # Escribe en SYSVOL del emulador PDC por ruta UNC: necesita las credenciales (doble salto)
+      become: true
+      register: gpo
+
+    - name: Resumen
+      ansible.builtin.debug:
+        msg: "{{ (gpo.output | last).Detalle | default([]) or ['Sin cambios: las GPO ya estaban al día'] }}"

@@ -1,0 +1,227 @@
+---
+# linux-01-dominio.yml
+# Une los servidores Linux de la red de servidores (VLAN 40) a cibernova.local con
+# realmd + SSSD:
+#   1. Hora sincronizada con los DC (Kerberos rechaza más de 5 minutos de desfase)
+#   2. Cuenta de equipo en OU Servidores, creada en DC01 con una contraseña de un solo
+#      uso: en el Linux no se escribe ninguna contraseña de administrador del dominio
+#   3. Inicio de sesión solo para G_Adm_Sistemas (las cuentas adm.), con sudo
+#   4. SSH: las cuentas del dominio entran con contraseña o con Kerberos; alex, solo con clave
+#
+# WEB01 y WEB02 se quedan fuera: están en la DMZ (VLAN 100) y unirlas obligaría a abrir
+# Kerberos y LDAP desde la DMZ hacia los DC. Se administran con la cuenta local.
+#
+# El usuario local alex no se toca: Ansible entra igual aunque el dominio no responda.
+#
+# Uso (la primera vez, de uno en uno):
+#   ansible-playbook playbooks/linux-01-dominio.yml --ask-vault-pass --limit cn-cmk
+#   ansible-playbook playbooks/linux-01-dominio.yml --ask-vault-pass
+# Comprobar en el servidor:   realm list ; id adm.<usuario>
+# Sacar un servidor:          sudo realm leave cibernova.local
+
+- name: Servidores Linux en el dominio
+  hosts: db:mon
+  become: true
+  serial: 1
+  vars:
+    dominio: "{{ ad_dominio }}"
+    reino: "{{ ad_dominio | upper }}"
+    dn_dominio: "{{ ad_dominio.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
+    ou_servidores: "OU=Servidores,OU=CiberNova,{{ dn_dominio }}"
+    grupo_admin: g_adm_sistemas
+    equipo: "{{ ansible_hostname | upper }}"
+    fqdn: "{{ ansible_hostname | lower }}.{{ ad_dominio }}"
+
+  handlers:
+    - name: Reiniciar timesyncd
+      ansible.builtin.systemd_service:
+        name: systemd-timesyncd
+        state: restarted
+
+    - name: Reiniciar sssd
+      ansible.builtin.systemd_service:
+        name: sssd
+        state: restarted
+
+    # Ubuntu 24.04 arranca sshd por socket: si no hay ningún sshd en marcha, la
+    # configuración nueva se lee en la siguiente conexión y no hay nada que reiniciar.
+    - name: Reiniciar ssh
+      ansible.builtin.command: systemctl try-restart ssh.service
+      changed_when: true
+
+  tasks:
+    # El paquete krb5-user pregunta el reino al instalarse; la respuesta da igual
+    # porque /etc/krb5.conf se reescribe justo después.
+    - name: Paquetes de realmd y SSSD
+      ansible.builtin.apt:
+        name: [realmd, sssd, sssd-tools, libnss-sss, libpam-sss, adcli, krb5-user]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Carpeta de configuración de timesyncd
+      ansible.builtin.file:
+        path: /etc/systemd/timesyncd.conf.d
+        state: directory
+        mode: "0755"
+
+    - name: Hora de los controladores de dominio
+      ansible.builtin.copy:
+        dest: /etc/systemd/timesyncd.conf.d/cibernova.conf
+        content: |
+          [Time]
+          NTP=dc01.{{ dominio }} dc02.{{ dominio }}
+          FallbackNTP=
+        mode: "0644"
+      notify: Reiniciar timesyncd
+
+    - name: Aplicar la hora antes de Kerberos
+      ansible.builtin.meta: flush_handlers
+
+    - name: Esperar a que la hora esté sincronizada
+      ansible.builtin.command: timedatectl show -p NTPSynchronized --value
+      register: ntp
+      until: ntp.stdout == 'yes'
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    - name: Configuración de Kerberos
+      ansible.builtin.copy:
+        dest: /etc/krb5.conf
+        content: |
+          [libdefaults]
+              default_realm = {{ reino }}
+              dns_lookup_realm = false
+              dns_lookup_kdc = true
+              rdns = false
+        mode: "0644"
+
+    - name: Configuración de realmd
+      ansible.builtin.copy:
+        dest: /etc/realmd.conf
+        content: |
+          [service]
+          automatic-install = no
+
+          [users]
+          default-home = /home/%U
+          default-shell = /bin/bash
+
+          [{{ dominio }}]
+          fully-qualified-names = no
+          automatic-id-mapping = yes
+        mode: "0644"
+
+    - name: ¿Está ya en el dominio?
+      ansible.builtin.command: realm list --name-only
+      register: realm
+      changed_when: false
+
+    - name: Unir al dominio
+      when: dominio not in realm.stdout_lines
+      block:
+        - name: Contraseña de un solo uso para la cuenta de equipo
+          ansible.builtin.set_fact:
+            otp: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=32) }}"
+          no_log: true
+
+        - name: Cuenta de equipo {{ equipo }} en OU Servidores (DC01)
+          ansible.windows.win_powershell:
+            parameters:
+              Nombre: "{{ equipo }}"
+              OU: "{{ ou_servidores }}"
+              Dns: "{{ fqdn }}"
+              Otp: "{{ otp }}"
+              So: "{{ ansible_distribution }}"
+              Version: "{{ ansible_distribution_version }}"
+            script: |
+              param([string]$Nombre, [string]$OU, [string]$Dns, [string]$Otp, [string]$So, [string]$Version)
+              $ErrorActionPreference = 'Stop'
+              if (-not (Get-ADComputer -Filter "Name -eq '$Nombre'")) {
+                  New-ADComputer -Name $Nombre -SamAccountName "$Nombre`$" -Path $OU -DNSHostName $Dns `
+                      -Description 'Servidor Linux (realmd/SSSD)' -Enabled $true
+              }
+              Set-ADComputer -Identity "$Nombre`$" -OperatingSystem $So -OperatingSystemVersion $Version
+              Set-ADAccountPassword -Identity "$Nombre`$" -Reset `
+                  -NewPassword (ConvertTo-SecureString $Otp -AsPlainText -Force)
+          delegate_to: cn-dc01
+          become: false
+          no_log: true
+
+        - name: realm join con la contraseña de un solo uso
+          ansible.builtin.command: >-
+            realm join --one-time-password={{ otp }}
+            --computer-name={{ equipo }} --client-software=sssd
+            --membership-software=adcli {{ dominio }}
+          no_log: true
+          changed_when: true
+
+    - name: Opciones de SSSD
+      community.general.ini_file:
+        path: /etc/sssd/sssd.conf
+        section: "domain/{{ dominio }}"
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        mode: "0600"
+      loop:
+        - { option: use_fully_qualified_names, value: "False" }
+        - { option: fallback_homedir,          value: /home/%u }
+        - { option: ad_hostname,               value: "{{ fqdn }}" }
+        - { option: dyndns_update,             value: "True" }
+        - { option: access_provider,           value: simple }
+        - { option: simple_allow_groups,       value: "{{ grupo_admin }}" }
+      loop_control:
+        label: "{{ item.option }}"
+      notify: Reiniciar sssd
+
+    - name: ¿Se crea el /home de las cuentas del dominio en el primer inicio?
+      ansible.builtin.command: grep -q pam_mkhomedir /etc/pam.d/common-session
+      register: pam
+      changed_when: false
+      failed_when: false
+
+    - name: Activar pam_mkhomedir (crear /home en el primer inicio)
+      ansible.builtin.command: pam-auth-update --enable mkhomedir
+      when: pam.rc != 0
+      changed_when: true
+
+    - name: sudo para G_Adm_Sistemas
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-cibernova-ad
+        content: |
+          # Administradores de sistemas del dominio (cuentas adm.)
+          %{{ grupo_admin }} ALL=(ALL:ALL) ALL
+        mode: "0440"
+        validate: visudo -cf %s
+
+    # validate prueba el fichero antes de dejarlo en su sitio (sshd -t necesita
+    # /run/sshd, que no existe mientras ssh.service está parado)
+    - name: SSH con Kerberos y contraseña solo para G_Adm_Sistemas
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/50-cibernova-ad.conf
+        content: |
+          GSSAPIAuthentication yes
+
+          Match Group {{ grupo_admin }}
+              PasswordAuthentication yes
+        mode: "0644"
+        validate: /bin/bash -c 'install -d -m 0755 /run/sshd && /usr/sbin/sshd -t -f %s'
+      notify: Reiniciar ssh
+
+    - name: Aplicar cambios de SSSD y SSH
+      ansible.builtin.meta: flush_handlers
+
+    - name: Comprobación
+      ansible.builtin.shell: |
+        set -o pipefail
+        realm list | grep -E 'domain-name|configured|login-policy|permitted-groups'
+        getent group {{ grupo_admin }}
+      args:
+        executable: /bin/bash
+      register: comprobacion
+      changed_when: false
+
+    - name: Resultado
+      ansible.builtin.debug:
+        var: comprobacion.stdout_lines

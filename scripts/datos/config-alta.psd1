@@ -60,6 +60,8 @@
             NoCambiaContrasena = $true
             # Nombre del equipo de recepción (OU=Recepcion). Mientras sea $null no se limita.
             Equipos     = $null
+            # Perfil obligatorio (Anexo I). Windows añade .V6: la carpeta es recepcion.V6
+            ProfilePath = '\\files01.cibernova.local\Perfiles$\Obligatorio\recepcion'
         }
         @{
             Usuario     = 'auditor.ext'
