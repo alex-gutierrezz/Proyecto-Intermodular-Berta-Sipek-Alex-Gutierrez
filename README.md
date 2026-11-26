@@ -15,7 +15,7 @@ Infraestructura virtualizada, redundante y documentada para CiberNova Solutions 
 | [`docs/img/fase1/`](docs/img/fase1/) | Capturas que se enlazan desde la memoria |
 | [`docs/historico/propuesta-inicial.pdf`](docs/historico/propuesta-inicial.pdf) | Propuesta inicial de la Fase 1, superada por el diseño actual (ver sección 4 de la memoria) |
 | [`ansible/`](ansible/) | Inventario, variables y playbooks de Ansible (secretos cifrados con Ansible Vault) |
-| [`configs/proxmox/`](configs/proxmox/) | Configuración de red de Proxmox (bridges, VLANs y NAT) |
+| [`docs/configuracion/proxmox/`](docs/configuracion/proxmox/) | Copia de la configuración de red de proxmoxAB (bridges y VLANs), con la versión anterior en `docs/historico/` |
 | `scripts/` | Scripts del Anexo I (alta de usuarios desde el CSV). *Pendiente* |
 
 ## Diagrama de red
