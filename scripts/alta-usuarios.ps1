@@ -512,6 +512,7 @@ foreach ($c in $cfg.CuentasEspeciales) {
     if ($c.Horario) { $d.Horas = Get-LogonHours $c.Horario.Dias $c.Horario.HoraDesde $c.Horario.HoraHasta $zona }
     if ($c.Equipos) { $d.Equipos = $c.Equipos }
     elseif ($c.ContainsKey('Equipos')) { Registrar "$($c.Usuario): sin equipo de recepción en config-alta.psd1 (pendiente)" AVISO }
+    if ($c.ProfilePath) { $d.ProfilePath = $c.ProfilePath }
     try {
         $dn = Confirmar-Usuario $d
         if ($dn) {
