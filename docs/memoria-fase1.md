@@ -145,11 +145,11 @@ Para cada desfase anotamos qué habíamos planificado, qué pasó, por qué, qu�
 | D8 | Promoción del dominio en DC01 y DC02 y dcdiag el 17/11 (medida de D7) | El 16/11 (lunes, sin clase) Guti creó el bosque en DC01 con Ansible; DC02 y los servidores miembro siguen pendientes | Trabajo fuera del horario de clase para recuperar el retraso de D7 | El 17/11 se preparan las 6 Windows restantes y se lanza cibernova-dominio.yml (DC02, OUs, unión al dominio y DHCP con failover) | Positivo: recupera parte del retraso de D7. Riesgo: si la preparación de las 6 Windows se alarga, DC02 y DHCP pasan al 19/11 |
 | D9 | 17/11 (medida de D8): preparar las 6 Windows restantes, promover DC02 y lanzar cibernova-dominio.yml | Guti instaló y dejó con la configuración base los firewalls FW01 y FW02 (OPNsense). Las 6 Windows, DC02 y el DHCP siguen sin empezar | Trabajo no planificado: firewalls en HA con el rango 192.168.202.84 a 192.168.202.87 asignado por el profesor. Por qué se hizo ese día y no después: pendiente de anotar | El 19/11 se hizo todo en una sesión: HA y corte de red de los firewalls, DC02, DHCP01, DHCP02 y DHCP con failover. FILES01, FILES02 y BACKUP pasan a la próxima sesión | Recuperado el 19/11: DC02 y el DHCP con failover quedan hechos en la semana 2, como pedía el plan, y además se adelanta la alta disponibilidad de la red. De la semana 2 faltan el relay DHCP y un cliente de prueba |
 
-**Ruta crítica hasta el 15/12.** Es la cadena de tareas que depende una de otra (sin dominio no hay usuarios, sin usuarios no hay permisos y sin permisos no hay pruebas): cualquier retraso en ella retrasa el final. Las tareas "con holgura" pueden moverse sin afectar a la fecha final. Por eso los desfases D7 y D8, que retrasan el dominio, son los que más importan.
+**Ruta crítica hasta el 4/12.** Es la cadena de tareas que depende una de otra (sin dominio no hay usuarios, sin usuarios no hay permisos y sin permisos no hay pruebas): cualquier retraso en ella retrasa el final. Las tareas "con holgura" pueden moverse sin afectar a la fecha final. Por eso los desfases D7 y D8, que retrasan el dominio, son los que más importan.
 
 *Cómo leer los ID que van detrás de cada barra:*&#32;
 
-- **S** = semana del plan semanal del apartado [sección 14](#14-plan-para-lo-que-queda-de-trimestre) (S1 es la semana del 10/11 y S6 la del 15/12) .
+- **S** = semana del plan semanal del apartado [sección 14](#14-plan-para-lo-que-queda-de-trimestre) (S1 es la semana del 10/11, S5 el cierre del 4/12 y S6 el margen hasta el 18/12) .
 - &#32;**B** = sesión de la bitácora ya realizada ([sección 3](#3-diario-de-trabajo-bitácora)).&#32;
 - Los desfases de la tabla de arriba usan **D**.
 
@@ -240,6 +240,8 @@ Impacto: una sesión de retraso ahora. A cambio, las pruebas de redundancia de l
 
 ![Mapa de las 32 decisiones técnicas de la Fase 1 por capa, con lo elegido y lo descartado](diagramas/decisiones-tecnicas-fase1.png)
 
+*Figura 5.1.* Mapa de las 32 decisiones técnicas de la Fase 1 por capa, del hardware a la documentación: en verde lo elegido y en naranja las decisiones con un riesgo aceptado. El original editable en diagrams.net está en `docs/diagramas/decisiones-tecnicas-fase1.drawio`.
+
 ## 6. Diseño de red: VLANs, IPs y diagrama
 
 Dividimos la red en VLAN 40 (servidores internos) y VLAN 100 (DMZ con los servidores web), con Proxmox como router y NAT hacia la red del aula. Pusimos la web en una DMZ separada para que, si alguien compromete WEB01, no tenga acceso directo a los DC ni a los ficheros. El router y el NAT son dos firewalls OPNsense en alta disponibilidad (FW01 y FW02, [apartado 6.4](#64-firewalls-opnsense-en-alta-disponibilidad-1711)); Proxmox solo conserva una IP de gestión (192.168.40.4). El tráfico entre VLANs ya pasa por los firewalls, pero de momento una regla temporal lo permite todo (ver [16.3](#163-riesgos-y-mejoras-para-las-fases-2-y-3)).
@@ -262,6 +264,8 @@ En resumen: CARP decide quién tiene la IP, pfsync copia las conexiones y XMLRPC
 **Diagrama de red de la Fase 1.** Se lee de izquierda a derecha, siguiendo el camino del tráfico: red del aula → `vmbr0` → VIP de la WAN → FW01 (activo) o FW02 (relevo) → VIP internas → `vmbr1` → cada VLAN con sus VMs. `vmbr1` no tiene tarjeta física, así que para salir al aula todo pasa por los firewalls. FW01 y FW02 están uno encima del otro porque hacen lo mismo; la VLAN 99 entre ellos es solo su enlace de sincronización, no un paso del tráfico. Proxmox solo tiene `vmbr1.40` (.4) para gestión. El original está en `docs/diagramas/red-fase1.dot` del repositorio.
 
 ![Diagrama de red de la Fase 1: red del aula, vmbr0, firewalls FW01 y FW02 en HA con sus VIP, vmbr1 y las VLAN 40, 50 y 100 con cada VM](diagramas/red-fase1.svg)
+
+*Figura 6.0.2.* Diagrama de red de la Fase 1: la red del aula, `vmbr0`, FW01 y FW02 en alta disponibilidad con sus VIP, `vmbr1` y las VLAN 40, 50 y 100 con sus VMs. El original está en `docs/diagramas/red-fase1.dot`.
 
 **Cómo leer el diagrama.** Términos de Proxmox que aparecen en él (la configuración detallada está en la [sección 6.3](#63-configuración-en-proxmox)):
 
@@ -585,6 +589,8 @@ ISOs disponibles en Proxmox el 12/11:
 
 ![ls -lh de las cuatro ISO en /var/lib/vz/template/iso](img/fase1/12-11/07-proxmox-isos.png)
 
+*Figura 7.1.* Las cuatro ISO de `/var/lib/vz/template/iso` en proxmoxAB el 12/11: la de idiomas y características (LOF), Ubuntu Server 24.04.4, `virtio-win.iso` y `WS2025_eval.iso`. Archivo: [`07-proxmox-isos.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/12-11/07-proxmox-isos.png)
+
 ## 8. Inventario de máquinas y servicios
 
 Estado a 19/11/2026: 6 VMs Linux desplegadas, 7 VMs Windows recreadas con el playbook proxmox-vms-windows.yml (VirtIO, VLAN 40, WS2025 y virtio-win montados, etiqueta ws2025), DC01 operativo como controlador del dominio cibernova.local, DC02 replicando con DC01, DHCP01 y DHCP02 en el dominio con failover, dos firewalls OPNsense (FW01 y FW02) en alta disponibilidad y una plantilla.
@@ -677,6 +683,8 @@ Cada VM Linux se crea como clon completo (`qm clone 9000 <id> --full`) y recibe 
 Commit del playbook que crea las VMs Windows (12/11):
 
 ![Commit feat(proxmox) 06aff21 en la VM Ansible](img/fase1/12-11/09-git-commit-playbook-proxmox.png)
+
+*Figura 9.2.1.* Commit `feat(proxmox)` `06aff21` en la VM Ansible, con `inventario.ini` y `playbooks/proxmox-vms-windows.yml`. Archivo: [`09-git-commit-playbook-proxmox.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/12-11/09-git-commit-playbook-proxmox.png)
 
 ### 9.3 Inventario
 
@@ -957,6 +965,10 @@ Los tres están en la tabla de playbooks de la [sección 9.4](#94-playbooks); aq
 3. DHCP01 y DHCP02 solo tienen una interfaz, en la VLAN 40.
 4. El broadcast DHCP no cruza routers: solo llegará a la VLAN 50 a través del relay de OPNsense, y en la WAN no hay ni habrá relay.
 
+![Diagrama del aislamiento: la red del aula llega a vmbr0, donde no hay ningún DHCP ni relay, y el broadcast no cruza hasta vmbr1, donde DHCP01 y DHCP02 tienen su única interfaz en la VLAN 40](diagramas/dhcp-aislamiento-aula-fase1.png)
+
+*Figura 11.3.9.* Por qué este DHCP no puede dar IP en el aula: DHCP01 y DHCP02 solo tienen interfaz en `vmbr1` (VLAN 40); `vmbr0`, el único bridge con tarjeta física, no tiene ningún DHCP ni relay; y el broadcast DHCP no cruza el router. El ámbito solo reparte en la VLAN 40 y, a través del relay de OPNsense, en la VLAN 50. El original editable en diagrams.net está en `docs/diagramas/dhcp-aislamiento-aula-fase1.drawio`.
+
 También se actualizaron los comentarios de `group_vars/dhcp.yml`, que todavía hablaban de la puerta de enlace y del relay de Proxmox.
 
 ## 12. Problemas encontrados y soluciones
@@ -997,9 +1009,13 @@ Para cada problema anotamos el síntoma, la causa, la solución y cómo comproba
 
 ![qm list y ISOs disponibles antes de corregir P2](img/fase1/12-11/12-p2-qm-list-antes.png)
 
+*Figura 12.1.* `qm list` antes del cambio: BOOTDISK a 0.00 GB en DHCP y FILES02, y solo las ISO de LOF y Ubuntu disponibles en el datastore. Archivo: [`12-p2-qm-list-antes.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/12-11/12-p2-qm-list-antes.png)
+
 Aquí se ve la configuración antes de volver a pasar el playbook con las nuevas actualizaciones, las máquinas con Windows Server tenían la configuración mal hecha y su ISO hacía referencia a la ISO de idiomas y características (LOF) que es una **imagen de disco oficial distribuida por **[**Microsoft**](https://learn.microsoft.com/en-us/azure/virtual-desktop/windows-11-language-packs)** que contiene todos los paquetes de idioma y funciones adicionales de Windows 10, Windows 11 o Windows Server en un único archivo para instalarlos sin conexión a internet**. \[[1](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/features-on-demand-v2--capabilities?view=windows-11), [2](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/languages-overview?view=windows-11), [3](https://www.youtube.com/watch?v=svF4lrOVKt8)\]
 
 ![12-p2-qm-config-antes.png](img/fase1/12-11/12-p2-qm-config-antes.png)
+
+*Figura 12.2.* `qm config` de DHCP y FILES02 antes del cambio: `scsi0` existe (discos de 40 y 60 GB), pero no aparece en `boot: order=...`. Archivo: [`12-p2-qm-config-antes.png`](https://github.com/bertasipekmenendez-asix/Proyecto-Intermodular-Berta-Sipek-Alex-Gutierrez/blob/main/docs/img/fase1/12-11/12-p2-qm-config-antes.png)
 
 Después de ejecutar el playbook, ya no queda ninguna máquina con el disco de arranque a 0 GB.
 
@@ -1007,32 +1023,36 @@ Después de ejecutar el playbook, ya no queda ninguna máquina con el disco de a
 
 El enunciado pide que no haya puntos únicos de fallo, pero con un solo servidor físico el propio hipervisor lo es. Lo reconocemos y explicamos cómo lo mitigamos.
 
-| Componente | ¿Es punto único de fallo? | Mitigación actual | Mitigación ideal en producción |
-| --- | --- | --- | --- |
-| Discos | No | RAID 10 | — |
-| Servidor físico / Proxmox | Sí | Backups de VMs | Clúster Proxmox de 3 nodos con HA |
-| Red del aula / NAT | Sí | — | Dos enlaces y router redundante |
-| Router y firewall entre VLAN | No ante la caída de una VM (failover probado el 19/11 sin perder paquetes); sí ante la del host | FW01 + FW02 con CARP, pfsync y XMLRPC, en servicio desde el 19/11 | Firewalls en hosts físicos distintos o appliances dedicados |
-| Identidades | No | DC01 + DC02 replicando sin errores (19/11) | — |
-| DHCP | No | Failover 50/50 en estado Normal (19/11); probado en el redimensionado, reiniciando uno y después el otro | — |
-| Web | No (cuando esté) | WEB01 + WEB02 | — |
-| Base de datos | No (cuando esté) | Réplica DB01 → DB02 | — |
-| Ficheros | No (cuando esté) | DFS-R FILES01 ↔ FILES02 | — |
-| Backups | Sí si se guardan en el mismo host | Por decidir | Copia externa (regla 3-2-1) |
-| Ansible / Checkmk | Sí, pero no afectan al servicio | Configuración en Git, se reconstruyen | — |
+| Componente | ¿Es punto único de fallo? | Mitigación actual | ¿Mitigado? | Mitigación ideal en producción |
+| --- | --- | --- | --- | --- |
+| Discos | No. Cada disco tiene su espejo en el RAID 10: si falla uno, el otro sigue sirviendo los datos sin que se pare nada | RAID 10 | Sí, con el RAID 10 | — |
+| Servidor físico / Proxmox | Sí. Es el único host: si se para, se paran a la vez todas las VMs. Los backups permiten recuperar después, pero no evitan el corte | Backups de VMs | No: los backups recuperan, pero no evitan el corte | Clúster Proxmox de 3 nodos con HA |
+| Red del aula / NAT | Sí. Solo hay un camino hacia el aula y no lo gestionamos nosotros: si cae, por dentro todo sigue vivo, pero queda incomunicado | — | No: la red del aula no es nuestra | Dos enlaces y router redundante |
+| Router y firewall entre VLAN | No ante la caída de una VM: FW02 asume las VIP y en el failover del 19/11 no se perdió ningún paquete. Sí ante la del host, porque los dos firewalls corren sobre el mismo Proxmox | FW01 + FW02 con CARP, pfsync y XMLRPC, en servicio desde el 19/11 | Sí a nivel de VM, probado el 19/11; no a nivel de host | Firewalls en hosts físicos distintos o appliances dedicados |
+| Identidades | No. DC01 y DC02 son controladores equivalentes y replican sin errores: si cae uno, el otro sigue autenticando y resolviendo DNS | DC01 + DC02 replicando sin errores (19/11) | Sí, probado el 19/11 | — |
+| DHCP | No. El ámbito está repartido 50/50 entre DHCP01 y DHCP02: reiniciamos primero uno y luego el otro y los clientes siguieron recibiendo IP | Failover 50/50 en estado Normal (19/11); probado en el redimensionado, reiniciando uno y después el otro | Sí, probado el 19/11 | — |
+| Web | No cuando esté: WEB01 y WEB02 servirán lo mismo. Mientras solo haya uno desplegado, sí lo sería | WEB01 + WEB02 | Todavía no: el servicio web no está desplegado | — |
+| Base de datos | No cuando esté: DB02 será réplica de DB01. Mientras no exista la réplica, sí lo sería | Réplica DB01 → DB02 | Todavía no: la réplica no está montada | — |
+| Ficheros | No cuando esté: DFS-R mantendrá la misma carpeta en FILES01 y FILES02. Hasta entonces, sí lo sería | DFS-R FILES01 ↔ FILES02 | Todavía no: DFS-R no está montado | — |
+| Backups | Sí si se guardan en el mismo host: una copia que muere con el servidor al que protege no sirve de nada | Por decidir | No: falta decidir dónde se guardan | Copia externa (regla 3-2-1) |
+| Ansible / Checkmk | Sí, pero no afecta al servicio: si caen, el usuario no nota nada; solo perdemos automatización y monitorización hasta reconstruirlas desde Git | Configuración en Git, se reconstruyen | No hace falta: su caída no corta el servicio | — |
+
+**¿Están resueltos todos los puntos únicos de fallo? No, y con un solo servidor físico no pueden estarlo.** Siguen abiertos el host de Proxmox, la red del aula, la ubicación de los backups y el cortafuegos a nivel de host, porque los dos corren sobre el mismo hipervisor. Los asumimos como riesgo y en la última columna está lo que haría falta en producción.
+
+Ansible y Checkmk son la excepción que aceptamos a propósito: son punto único de fallo, pero su caída no corta ningún servicio y se reconstruyen desde Git.
 
 ## 14. Plan para lo que queda de trimestre
 
-Nuestro objetivo es tenerlo todo terminado el 15/12 y dejar el 17/12 y el 18/12 (último día de clase) como margen y ensayo de la defensa. Rehicimos el plan el 10/11, con clase los martes y jueves: es la replanificación que justifica el desfase D4, y lo ajustamos el 12/11 (D7).
+Este apartado no es el calendario del 22/09, el que hicimos al principio, antes de montar nada, con los cinco hitos del enunciado: aquel se queda sin tocar en la [sección 2](#2-calendario-original), para poder comparar lo previsto con lo que pasó. Aquí va el plan de lo que queda por hacer, y se actualiza cada vez que cambia. Nuestro objetivo es tenerlo todo terminado el 4/12, dejando desde esa fecha hasta el 18/12 (último día de clase) como margen y ensayo de la defensa. Rehicimos el plan el 10/11, con clase los martes y jueves: es la replanificación que justifica el desfase D4, y lo ajustamos el 12/11 (D7).
 
 | # | Semana | Sesiones | Objetivo | Hecho cuando |
 | --- | --- | --- | --- | --- |
 | S1 | 1 | 10/11, 12/11 | Corregir discos de DHCP y FILES02; instalar Windows Server en DC01 y DC02; promover el dominio | `dcdiag` sin errores en ambos DC |
 | S2 | 2 | 17/11, 19/11 | DHCP con failover; red de clientes; DNS de las Linux apuntando a los DC; formatear discos de WEB/DB | Un cliente recibe IP y une al dominio |
 | S3 | 3 | 24/11, 26/11 | Script de alta desde el CSV (OU, grupos, usuarios, carpetas personales); GPO de contraseñas y perfiles | 89 usuarios creados; segunda ejecución sin duplicados |
-| S4 | 4 | 01/12, 03/12 | FILES01/02 con DFS-N y DFS-R; carpetas, permisos NTFS y ABE según P-01 a P-44 | Pruebas 1 a 8 del Anexo I correctas |
-| S5 | 5 | 08/12, 10/12 | Web + SFTP con redundancia; MariaDB con réplica; backups con restauración de prueba | Apagar el principal y el servicio sigue |
-| S6 | 6 | 15/12, 17/12 | 15/12: pruebas 9 a 15, últimas capturas y memoria cerrada. 17/12: solo margen y ensayo de la defensa | Documento completo y demo ensayada |
+| S4 | 4 | 01/12, 03/12 | 01/12: FILES01 y FILES02 con DFS-N y DFS-R, carpetas y permisos NTFS y ABE según P-01 a P-44. 03/12: WEB01/WEB02, réplica DB01 → DB02 y backups con una restauración de prueba | Pruebas 1 a 15 del Anexo I correctas y, al apagar el servidor principal de cada servicio, el otro responde |
+| S5 | 4 (viernes) | 04/12, fuera de clase | Cierre: memoria terminada, capturas pegadas, inventario al día y todo subido al repositorio | Documentación completa y entregada el 4/12 |
+| S6 | 5 y 6 | 08/12 a 18/12 | Margen para lo que se haya quedado suelto y ensayo de la defensa | Demo ensayada y defensa preparada |
 
 Mientras uno instala, el otro documenta esa misma sesión: así la memoria no se queda para el final. En cada sesión actualizamos la bitácora y el inventario.
 
@@ -1040,42 +1060,42 @@ Mientras uno instala, el otro documenta esa misma sesión: así la memoria no se
 
 ### 14.1 Qué es cada tarea del plan y por qué está ahí
 
-Cada tarea está en ese orden porque depende de la anterior: sin dominio no hay usuarios, sin usuarios no hay permisos y sin permisos no se pueden hacer las pruebas del Anexo I.
+Esto es el detalle de la tabla de arriba: un bloque por cada fila, con qué es cada tarea, por qué va donde va y cuándo se da por hecha. Cada tarea está en ese orden porque depende de la anterior: sin dominio no hay usuarios, sin usuarios no hay permisos y sin permisos no se pueden hacer las pruebas del Anexo I.
 
-**Semana 1 (10/11, 12/11)**
+**Semana 1 (10/11, 12/11) · hecha**
 
 - *Corregir los discos de DHCP y FILES02.* Las dos VMs aparecen con disco de arranque de 0 GB (problema P2). Sin disco no se puede instalar Windows en ellas.
 - *Windows Server en DC01 y DC02 y promover el dominio.* Active Directory es la base de todo el Anexo I: usuarios, grupos, GPO y permisos. Se montan dos DC para que la autenticación y el DNS no sean un punto único de fallo.
 - *Hecho cuando `dcdiag` no da errores.* `dcdiag` comprueba la salud del dominio, incluidos el DNS y la replicación entre los dos DC. Es la prueba objetiva de que el dominio funciona.
 
-**Semana 2 (17/11, 19/11)**
+**Semana 2 (17/11, 19/11) · hecha en parte: quedan la red de clientes, el DNS de las Linux y los discos de datos de WEB y DB**
 
 - *DHCP con failover.* Dos servidores DHCP que comparten las concesiones, para que si cae uno los equipos sigan recibiendo IP sin repetir direcciones.
 - *Red de clientes.* Hace falta para probar el DHCP, unir un equipo al dominio y hacer las pruebas del Anexo I con usuarios reales. Su VLAN y su rango están pendientes de decidir.
 - *DNS de las Linux hacia los DC.* La plantilla usa 8.8.8.8 (problema P3). Con el dominio en marcha, las Linux tienen que resolver los nombres internos, así que se cambia con Ansible.
 - *Formatear los discos de datos de WEB y DB* (problema P4). Separa los datos del sistema: se puede ampliar, copiar o restaurar el disco de datos sin tocar el sistema operativo.
 
-**Semana 3 (24/11, 26/11)**
+**Semana 3 (24/11, 26/11) · en curso**
 
 - *Script de alta desde el CSV.* Es obligatorio en el Anexo I: crea OU, grupos, los 89 usuarios y sus carpetas personales, y tiene que poder relanzarse sin duplicados (idempotente).
 - *GPO de contraseñas y perfiles.* El Anexo I pide 12 caracteres en general y 15 para Dirección, Sistemas y cuentas adm. Como un dominio solo tiene una directiva general, los 15 caracteres se hacen con directivas específicas (PSO) por grupo. Los perfiles son móviles para Dirección y Comercial, locales con redirección para el resto y obligatorio para recepcion.bcn.
 
-**Semana 4 (01/12, 03/12)**
+**Semana 4, primera sesión (01/12)**
 
 - *FILES01/02 con DFS-N y DFS-R.* DFS-N da el espacio de nombres único `\\<dominio>\empresa` que exige el Anexo I; DFS-R replica los datos entre los dos servidores para que no haya un solo servidor de ficheros.
 - *Permisos NTFS y ABE según P-01 a P-44.* Traducen los requisitos de negocio a grupos DL\_ en las ACL. ABE hace que nadie vea las carpetas a las que no tiene acceso.
 - *Hecho cuando pasan las pruebas 1 a 8 del Anexo I,* que son las que comprueban permisos de carpetas.
 
-**Semana 5 (08/12, 10/12)**
+**Semana 4, segunda sesión (03/12)**
 
 - *Web + SFTP con redundancia y MariaDB con réplica.* Cubren los servicios web y de base de datos del enunciado, duplicados en dos máquinas cada uno.
 - *Copias con restauración de prueba.* Una copia que no se ha restaurado nunca no demuestra nada; la restauración es la evidencia.
 - *Hecho cuando se apaga el servidor principal y el servicio sigue.* Es la forma de demostrar que no hay punto único de fallo en ese servicio.
 
-**Semana 6 (15/12, 17/12)**
+**Cierre (04/12) y margen (del 08/12 al 18/12)**
 
-- *Pruebas 9 a 15, capturas y memoria cerrada el 15/12.* Son las pruebas de perfiles, horarios, cuotas y auditoría, que dependen de todo lo anterior.
-- *17/12 solo para margen y ensayo.* Si algo se retrasa, se recorta aquí y no en la memoria.
+- *Pruebas 9 a 15, capturas y memoria cerrada el 04/12.* Son las pruebas de perfiles, horarios, cuotas y auditoría, que dependen de todo lo anterior.
+- *Del 08/12 al 18/12, solo margen y ensayo.* Si algo se retrasa, se recorta aquí y no en la memoria.
 
 ### 14.2 Reparto y entregas semanales
 
