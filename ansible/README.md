@@ -2,7 +2,7 @@
 
 Automatización de la infraestructura de la Fase 1: monitorización con Checkmk, preparación de las VMs Windows en Proxmox y Active Directory, DNS y DHCP en Windows Server 2025.
 
-> **Origen de esta carpeta.** Ansible se ejecuta en la **VM Ansible** (`192.168.40.5`, carpeta `~/cibernova/ansible`). Lo que hay aquí es una copia versionada de ese proyecto.
+> **Origen de esta carpeta.** Ansible se ejecuta en la **VM Ansible** (`192.168.40.5`, carpeta `~/cibernova/repo/ansible`). Lo que hay aquí es una copia versionada de ese proyecto.
 > 
 > Versión: **Ansible core 2.16.3**. Playbooks de Windows copiados del paquete de Guti del **16/11/2026** (no comparados directamente con la VM).
 > 
@@ -49,15 +49,15 @@ Conceptos que se usan en este documento:
 | `ansible.cfg` | Configuración de Ansible para este proyecto. Indica dónde está el inventario y desactiva la comprobación de la huella SSH de los servidores (`host_key_checking = False`). Ver [riesgos](#7-riesgos-conocidos). |
 | `requirements.yml` | Colecciones externas necesarias. Ahora solo `checkmk.general`, que aporta los módulos para crear hosts, descubrir servicios y activar cambios en Checkmk. Sin ella, `checkmk-agente.yml` falla. |
 | `inventory/inventario.ini` | Máquinas gestionadas y sus grupos. Ver [Inventario](#3-inventario). |
-| `group_vars/all/ad.yml` | Datos del dominio: nombre `cibernova.local`, NetBIOS, IPs de los DC, reenviadores DNS y NTP. |
-| `group_vars/windows.yml` | Conexión WinRM con los Windows (puerto, NTLM, cuenta `Administrador`) y `become` runas para el doble salto. |
-| `group_vars/dhcp.yml` | Ámbito DHCP de la VLAN 50 (propuesta) y nombre del failover. |
+| `inventory/group_vars/all/ad.yml` | Datos del dominio: nombre `cibernova.local`, NetBIOS, IPs de los DC, reenviadores DNS y NTP. |
+| `inventory/group_vars/windows.yml` | Conexión WinRM con los Windows (puerto, NTLM, cuenta `Administrador`) y `become` runas para el doble salto. |
+| `inventory/group_vars/dhcp.yml` | Ámbito DHCP de la VLAN 50 (propuesta) y nombre del failover. |
 | `vars/ad_estructura.yml` | Árbol de OUs y directiva de contraseñas del Anexo I; lo carga `ad-03-estructura.yml`. |
-| `group_vars/all/vars.yml` | Variables comunes a todas las máquinas: versión de Checkmk, nombre del sitio e IP del servidor. Si cambia la versión, solo se modifica aquí. |
-| `group_vars/all/vault.yml` | Variables secretas, cifradas con Ansible Vault: secreto del usuario `automation` de Checkmk, contraseña del Administrador de Windows, DSRM y secreto del failover DHCP. **Todavía no está subido.** |
-| `host_vars/` | Variables de una sola máquina, para cuando necesite un valor distinto al de su grupo. Ahora está vacía. |
+| `inventory/group_vars/all/vars.yml` | Variables comunes a todas las máquinas: versión de Checkmk, nombre del sitio e IP del servidor. Si cambia la versión, solo se modifica aquí. |
+| `inventory/group_vars/all/vault.yml` | Variables secretas, cifradas con Ansible Vault: secreto del usuario `automation` de Checkmk, contraseña del Administrador de Windows, DSRM y secreto del failover DHCP. **Todavía no está subido.** |
+| `inventory/host_vars/` | Variables de una sola máquina, para cuando necesite un valor distinto al de su grupo. Ahora está vacía. |
 
-> `group_vars/all/` significa "variables del grupo `all`". En Ansible, `all` incluye todas las máquinas, así que estas variables se cargan en cualquier playbook.
+> `inventory/group_vars/all/` significa "variables del grupo `all`". En Ansible, `all` incluye todas las máquinas, así que estas variables se cargan en cualquier playbook.
 
 ## 3. Inventario
 
@@ -73,7 +73,7 @@ Conceptos que se usan en este documento:
 | `files` | FILES01 (.30), FILES02 (.31) | `Administrador` (WinRM) | Servidores de ficheros. |
 | `backup` | BACKUP (.50) | `Administrador` (WinRM) | Copias de seguridad. |
 | `miembros` | `dhcp` + `files` + `backup` | — | Servidores que se unen al dominio sin ser DC. |
-| `windows` | `dc` + `miembros` | — | Las 7 Windows. Su conexión está en `group_vars/windows.yml`. |
+| `windows` | `dc` + `miembros` | — | Las 7 Windows. Su conexión está en `inventory/group_vars/windows.yml`. |
 | `proxmox` | proxmoxAB | `root` | El hipervisor. Va **fuera** del grupo `linux` para que el playbook del agente no instale Checkmk en Proxmox. |
 
 ## 4. Playbooks
@@ -114,13 +114,13 @@ ansible-playbook playbooks/checkmk-agente.yml --ask-vault-pass
 ansible-playbook playbooks/proxmox-vms-windows.yml --ask-vault-pass   # ver riesgos antes de lanzarlo
 ```
 
-`--ask-vault-pass` pide la contraseña del vault para descifrar `vault.yml`. Como ese fichero está en `group_vars/all/`, Ansible lo carga en **todos** los playbooks, incluso en los que no usan el secreto. Por eso todos la piden.
+`--ask-vault-pass` pide la contraseña del vault para descifrar `vault.yml`. Como ese fichero está en `inventory/group_vars/all/`, Ansible lo carga en **todos** los playbooks, incluso en los que no usan el secreto. Por eso todos la piden.
 
 **Resultado esperado:** en el resumen final (`PLAY RECAP`), todas las máquinas con `failed=0`. Si se relanza un playbook ya aplicado, las tareas salen como `ok` y no como `changed`.
 
 ## 6. Gestión de secretos (Ansible Vault)
 
-- Los secretos solo se guardan en `group_vars/all/vault.yml`, cifrado con AES256.
+- Los secretos solo se guardan en `inventory/group_vars/all/vault.yml`, cifrado con AES256.
 - El fichero cifrado sí se puede subir a Git: sin la contraseña no se puede leer.
 - **La contraseña del vault no se sube nunca** al repositorio ni a la documentación.
 
@@ -129,13 +129,13 @@ ansible-playbook playbooks/proxmox-vms-windows.yml --ask-vault-pass   # ver ries
 Antes de copiarlo de la VM Ansible al repositorio, hay que comprobar que está cifrado:
 
 ```bash
-head -1 group_vars/all/vault.yml
+head -1 inventory/group_vars/all/vault.yml
 ```
 
 | Salida | Significado | Qué hacer |
 | --- | --- | --- |
 | `$ANSIBLE_VAULT;1.1;AES256` | Cifrado (marca de Vault, versión del formato y algoritmo) | Se puede subir. |
-| `vault_cmk_api_secret: "…"` | **En claro** | **No subirlo.** Cifrarlo antes con `ansible-vault encrypt group_vars/all/vault.yml`. |
+| `vault_cmk_api_secret: "…"` | **En claro** | **No subirlo.** Cifrarlo antes con `ansible-vault encrypt inventory/group_vars/all/vault.yml`. |
 
 ## 7. Riesgos conocidos
 
