@@ -11,6 +11,9 @@
 #   ... -e ruta_personales='\\cibernova.local\empresa\Personales'
 # Con perfiles móviles (Dirección, Comercial) en el recurso Perfiles$ de ad-06-gpo.yml:
 #   ... -e ruta_perfiles='\\files01.cibernova.local\Perfiles$'
+# Las dos a la vez, en JSON y entre comillas simples para que bash no toque las barras:
+#   ... -e '{"ruta_personales": "\\\\cibernova.local\\empresa\\Personales",
+#            "ruta_perfiles": "\\\\files01.cibernova.local\\Perfiles$"}'
 #
 # Las contraseñas iniciales se quedan en DC01 (C:\CiberNova\credenciales, solo
 # Administradores); el playbook nunca las muestra.

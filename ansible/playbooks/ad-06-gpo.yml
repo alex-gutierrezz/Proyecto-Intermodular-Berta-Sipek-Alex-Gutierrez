@@ -10,9 +10,10 @@
 #                            en Administradores locales
 #
 # La unidad H: y el ProfilePath de cada usuario los pone alta-usuarios.ps1:
-#   ansible-playbook playbooks/ad-05-usuarios.yml --ask-vault-pass \
-#     -e "ruta_personales='\\cibernova.local\empresa\Personales'" \
-#     -e "ruta_perfiles='\\files01.cibernova.local\Perfiles$'"
+#   ansible-playbook playbooks/ad-05-usuarios.yml --ask-vault-pass -e '{
+#     "ruta_personales": "\\\\cibernova.local\\empresa\\Personales",
+#     "ruta_perfiles":   "\\\\files01.cibernova.local\\Perfiles$" }'
+#   (en JSON y entre comillas simples: con -e "clave=valor" bash se come las barras \\)
 #
 # Los perfiles van en FILES01 y fuera de la carpeta replicada por DFS-R: Microsoft no
 # admite perfiles móviles con varios destinos activos (la replicación puede pisar el
