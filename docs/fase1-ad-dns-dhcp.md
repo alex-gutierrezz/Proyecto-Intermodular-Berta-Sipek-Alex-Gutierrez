@@ -27,7 +27,7 @@
 |---|---|---|---|---|---|---|
 | 50 Clientes | 192.168.50.0/24 | .2 – .19 | .20 – .250 | 8 días | 192.168.50.1 (Proxmox) | DC01, DC02 |
 
-Para añadir más VLAN de clientes, se añade un elemento a `dhcp_ambitos` en `group_vars/dhcp.yml` y se relanza el playbook.
+Para añadir más VLAN de clientes, se añade un elemento a `dhcp_ambitos` en `inventory/group_vars/dhcp.yml` y se relanza el playbook.
 
 ## 2. Ficheros
 
@@ -42,20 +42,20 @@ playbooks/dhcp-01-failover.yml      rol DHCP, autorización en AD, ámbitos y fa
 playbooks/ad-99-verificar.yml       comprobaciones para las capturas (no cambia nada)
 playbooks/proxmox-vlan50-relay.yml  VLAN 50 de clientes + relay DHCP en Proxmox
 playbooks/cibernova-dominio.yml     TODO lo anterior en orden, con un solo comando
-group_vars/windows.yml              conexión WinRM
-group_vars/all/ad.yml               datos del dominio
-group_vars/dhcp.yml                 ámbito DHCP (VLAN 50)
+inventory/group_vars/windows.yml    conexión WinRM
+inventory/group_vars/all/ad.yml     datos del dominio
+inventory/group_vars/dhcp.yml       ámbito DHCP (VLAN 50)
 vars/ad_estructura.yml              OUs y directiva de contraseñas
 ```
 
 ## 3. Preparación (una sola vez, en la VM Ansible)
 
-> En el repositorio los ficheros ya están integrados: playbooks en `ansible/playbooks/`, variables en `ansible/group_vars/` y `ansible/vars/`, el inventario de los Windows al final de `ansible/inventory/inventario.ini` y las colecciones en `ansible/requirements.yml`.
+> En el repositorio los ficheros ya están integrados: playbooks en `ansible/playbooks/`, variables en `ansible/inventory/group_vars/` y `ansible/vars/`, el inventario de los Windows al final de `ansible/inventory/inventario.ini` y las colecciones en `ansible/requirements.yml`.
 
 ```bash
-cd ~/cibernova/ansible
+cd ~/cibernova/repo/ansible
 ansible-galaxy collection install -r requirements.yml --upgrade
-ansible-vault edit group_vars/all/vault.yml
+ansible-vault edit inventory/group_vars/all/vault.yml
 ```
 
 En el vault tienen que existir estas variables (los valores **solo** van en el vault cifrado, nunca en Git ni en la documentación). Todas deben cumplir la complejidad de Windows: 12 o más caracteres, mayúsculas, minúsculas, números y símbolos.
@@ -191,5 +191,5 @@ Al minuto, en DHCP01 (PowerShell): `Get-DhcpServerv4Lease -ScopeId 192.168.50.0`
 | `win_ping` da `401 Unauthorized` | Usuario o contraseña incorrectos | En Windows en español la cuenta es **Administrador**. Revisad `vault_win_admin_password` |
 | `win_ping` da `timed out` / `connection refused` | WinRM no está activado, el firewall lo bloquea o la IP no es la del inventario | En el Windows: `Enable-PSRemoting -Force -SkipNetworkProfileCheck`. Si tiene otra IP, usad `ip_actual` |
 | DC02 no encuentra el dominio | Su DNS no apunta a DC01 | El paso 3 lo pone. Comprobad `Resolve-DnsName _ldap._tcp.dc._msdcs.cibernova.local` |
-| `Access denied` al autorizar el DHCP o crear el failover | Doble salto NTLM | Las tareas llevan `become: true`. Comprobad `ansible_become_*` en `group_vars/windows.yml` |
+| `Access denied` al autorizar el DHCP o crear el failover | Doble salto NTLM | Las tareas llevan `become: true`. Comprobad `ansible_become_*` en `inventory/group_vars/windows.yml` |
 | La hora no sincroniza en DC01 | El aula bloquea NTP (UDP 123) | No afecta al dominio. Lo documentáis como incidencia: los DC y miembros se sincronizan con DC01 igualmente |
