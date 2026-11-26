@@ -13,13 +13,15 @@ fase1/
 │   └── 03-cierre/              Apagado ordenado de las VMs en proxmoxAB
 ├── 17-11/
 │   └── 04-firewalls/           Instalación y configuración base de FW01 y FW02 (OPNsense)
-└── 19-11/
-    ├── 04-firewalls/           HA, VIP CARP, NAT, corte de red de Proxmox y failover (28 a 39)
-    ├── 05-dc02/                Preparación, promoción y réplica de DC02
-    ├── 06-dhcp01/              Drivers VirtIO en DHCP01
-    ├── 07-dhcp02/              Drivers VirtIO en DHCP02
-    ├── 08-ad-estructura-dhcp/  OUs, unión al dominio y DHCP con failover
-    └── 09-redimensionado/      RAM y CPU de las VMs tras el cambio
+├── 19-11/
+│   ├── 04-firewalls/           HA, VIP CARP, NAT, corte de red de Proxmox y failover (28 a 39)
+│   ├── 05-dc02/                Preparación, promoción y réplica de DC02
+│   ├── 06-dhcp01/              Drivers VirtIO en DHCP01
+│   ├── 07-dhcp02/              Drivers VirtIO en DHCP02
+│   ├── 08-ad-estructura-dhcp/  OUs, unión al dominio y DHCP con failover
+│   └── 09-redimensionado/      RAM y CPU de las VMs tras el cambio
+└── 24-11/
+    └── 11-alta-usuarios/       Alta de usuarios, grupos, PSO y permisos desde el CSV del Anexo I
 ```
 
 ## 12/11/2026 — Preparación de las VMs Windows
@@ -200,3 +202,28 @@ La numeración sigue la de [`17-11/04-firewalls/`](17-11/04-firewalls/).
 | Fichero | Qué se ve |
 | --- | --- |
 | `01-proxmox-recursos-vms-tras-cambio.png` | Resultado del redimensionado: núcleos, memoria y tipo de CPU de cada VM después de ajustarlos a lo que necesita su servicio, y la memoria del servidor (125 GB en total, 43 GB en uso en ese momento). FILES01, FILES02 y BACKUP estaban apagadas. El reparto final es de 36 vCPU y 78 GB asignados de 128 GB |
+
+
+## 24/11/2026 — Alta de usuarios, grupos y permisos
+
+**De qué trata:** dar de alta a los 89 empleados del Anexo I con sus grupos, sus permisos y las cuentas especiales, con un script de PowerShell que lee el CSV (`scripts/alta-usuarios.ps1`) y que se lanza desde Ansible (`ad-05-usuarios.yml`). Antes de tocar el dominio real se probó entero en un dominio aislado (una VM clonada de DC01 en una VLAN sin nadie más), y después se ejecutó en `cibernova.local` con snapshots previos en los dos controladores. El detalle está en el apartado 11.4 de la memoria.
+
+**Qué hay en las capturas:** el resultado en Active Directory (OU, becaria con su caducidad, horario y grupos, los grupos DL_ y el AGDLP, quién es administrador del dominio y la PSO de 15 caracteres), los dos logs que demuestran que el script es idempotente, la réplica en DC02 y el repositorio ya ordenado en GitHub.
+
+### `11-alta-usuarios/` — Resultado del alta y evidencias
+
+| Fichero | Qué se ve |
+| --- | --- |
+| `01-ad-ou-usuarios.png` | Árbol de OU de `CiberNova` en DC01, con los 16 usuarios de Desarrollo dentro de la OU de su departamento. Cada empleado va a la OU que le toca según el CSV |
+| `02-ad-becaria-caducidad.png` | Pestaña *Cuenta* de una becaria: cambio de contraseña en el siguiente inicio de sesión y caducidad el 30/06/2027, que es lo que pide el Anexo para las becas |
+| `03-ad-becaria-horario.png` | Sus horas de inicio de sesión: de lunes a viernes, de 8:00 a 15:00. Fuera de esa franja no puede entrar |
+| `04-ad-becaria-grupos.png` | Sus grupos: `G_Becarios_Desarrollo` y `G_Sede_Barcelona`, y ningún `G_Desarrollo`. Es la prueba 1 del Anexo: una becaria no tiene los permisos de la plantilla de su departamento |
+| `05-ad-grupos-dl.png` | OU `DominioLocal` con los grupos `DL_`; en la descripción de cada uno, la carpeta y el nivel de acceso (C de consulta, M de modificación, L de lectura o el de denegar) |
+| `06-ad-agdlp-presupuestos.png` | AGDLP en una imagen: `DL_Administracion_Presupuestos_M` no contiene usuarios, contiene al grupo global `G_Comercial`. El permiso se da al grupo local de dominio y la gente entra por su grupo global |
+| `07-ad-admins-dominio.png` | *Admins. del dominio*: solo el Administrador y `G_Adm_Sistemas`, que es donde están las seis cuentas `adm.`. Las cuentas del día a día, incluidas las de Sistemas, no son administradoras del dominio |
+| `08-ad-pso-15.png` | La PSO `PSO_15_Caracteres` (15 caracteres, historial de 10, 90 días, bloqueo a los 5 intentos durante 15 minutos) y los grupos a los que se aplica: `G_Adm_Sistemas`, `G_Direccion` y `G_Sistemas` |
+| `09a-ad-log-alta.png` | Final del log de la ejecución real en DC01: creación de los últimos grupos `DL_`, la PSO, el aviso de dónde quedan las contraseñas iniciales y el resumen `Cambios: 363 · cuentas creadas: 101 · avisos: 2 · errores: 0` |
+| `09b-ad-log-segunda-pasada.png` | Log de la segunda pasada, lanzada justo después: `Cambios: 0 · cuentas creadas: 0 · avisos: 2 · errores: 0`. Es la evidencia de que el script es idempotente: lo que ya está bien no se vuelve a tocar |
+| `10-github-scripts-alta-usuarios.jpg` | Carpeta `scripts/` del repositorio con el script y la carpeta `datos/` (el CSV del Anexo, `config-alta.psd1` y `grupos-dl.csv`) |
+| `11-github-commits-2411.jpg` | Historial de commits del día: el alta de usuarios, la corrección de las rutas y la sincronización del repositorio de la VM Ansible con GitHub |
+| `12-ad-dc02-replica.png` | *Usuarios y equipos de Active Directory* conectado a **DC02**: los usuarios de Consultoría ya están ahí. El script solo se ejecutó en DC01; a DC02 han llegado por la replicación del dominio |
