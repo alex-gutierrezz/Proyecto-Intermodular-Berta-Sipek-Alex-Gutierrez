@@ -511,6 +511,7 @@
     - name: Cuotas especiales por grupo
       ansible.windows.win_powershell:
         script: |
+          $ErrorActionPreference = 'Stop'
           $Ansible.Changed = $false
           $especiales = [ordered]@{ 'G_Desarrollo' = 'CN-Personal-5GB'; 'G_Sistemas' = 'CN-Personal-5GB'; 'G_Becarios' = 'CN-Personal-500MB' }
           $hechos = @()
@@ -521,8 +522,10 @@
               if (-not (Test-Path $ruta)) { continue }
               $q = Get-FsrmQuota -Path $ruta -ErrorAction SilentlyContinue
               if ($q -and $q.Template -eq $especiales[$g]) { continue }
-              if ($q) { Set-FsrmQuota -Path $ruta -Template $especiales[$g] -MatchesTemplate | Out-Null }
-              else { New-FsrmQuota -Path $ruta -Template $especiales[$g] | Out-Null }
+              # Set-FsrmQuota no admite -Template: la cuota de 2 GB que puso la cuota automática
+              # se borra y se crea otra desde la plantilla que toca.
+              if ($q) { Remove-FsrmQuota -Path $ruta -Confirm:$false }
+              New-FsrmQuota -Path $ruta -Template $especiales[$g] | Out-Null
               $hechos += "$($u.SamAccountName)=$($especiales[$g])"; $Ansible.Changed = $true
             }
           }
