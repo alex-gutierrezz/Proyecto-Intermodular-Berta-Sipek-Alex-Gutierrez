@@ -370,7 +370,7 @@
             if ($protegida) { Base $acl }
             if ($rel -eq 'Personales') { $acl.AddAccessRule((Regla $EMPLEADOS $R::ReadAndExecute $NADA $PNONE)) }
             foreach ($f in ($filas | Where-Object Carpeta -eq $rel)) {
-              foreach ($r in (Reglas-Nivel (Sid "$Netbios\$($f.Grupo)") $f.Nivel)) { $acl.AddAccessRule($r) }
+              foreach ($regla in (Reglas-Nivel (Sid "$Netbios\$($f.Grupo)") $f.Nivel)) { $acl.AddAccessRule($regla) }
             }
             # Auditoría: lectura, escritura, borrado y cambios de permisos, éxito y error
             if ($Auditadas -contains $rel) {
@@ -477,7 +477,15 @@
             Set-DfsrMembership -GroupName $rg -FolderName $rf -ComputerName FILES02 -ContentPath $ruta -DomainName $Dominio -Force | Out-Null
             $Ansible.Changed = $true
           }
-          Update-DfsrConfigurationFromAD -ComputerName FILES01, FILES02
+          # Que los dos miembros lean ya la configuración de AD (si no, tardan hasta 60 min).
+          # Update-DfsrConfigurationFromAD usa WMI remoto y en Server 2025 puede fallar con
+          # "No se encontró ninguna instancia"; reiniciar el servicio DFSR consigue lo mismo.
+          if ($Ansible.Changed) {
+            foreach ($s in 'FILES01', 'FILES02') {
+              try { Update-DfsrConfigurationFromAD -ComputerName $s -ErrorAction Stop }
+              catch { Get-Service -Name DFSR -ComputerName $s | Restart-Service -Force }
+            }
+          }
           Get-DfsrMembership -GroupName $rg -DomainName $Dominio | Select-Object ComputerName, ContentPath, PrimaryMember, Enabled | Format-Table | Out-String
         parameters:
           Dominio: "{{ dominio }}"
